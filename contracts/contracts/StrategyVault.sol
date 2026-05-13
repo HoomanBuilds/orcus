@@ -13,12 +13,16 @@ contract StrategyVault {
     mapping(address => Intent) public intents;
     mapping(address => uint256) public balances;
     address public immutable teeAgentAddress;
+    address public immutable jaineRouter;
 
     event IntentSet(address indexed user, uint256 amount);
     event TradeExecuted(address indexed user, bytes32 receiptHash, bytes teeAttestation);
 
-    constructor(address _teeAgentAddress) {
+    constructor(address _teeAgentAddress, address _jaineRouter) {
+        require(_teeAgentAddress != address(0), "zero agent");
+        require(_jaineRouter != address(0), "zero router");
         teeAgentAddress = _teeAgentAddress;
+        jaineRouter = _jaineRouter;
     }
 
     function depositAndSetIntent(
@@ -40,12 +44,18 @@ contract StrategyVault {
 
     function executeTradeWithProof(
         address user,
-        bytes calldata,
+        bytes calldata tradeData,
         bytes calldata teeAttestation,
         bytes32 storageReceiptHash
     ) external {
         require(msg.sender == teeAgentAddress, "Unauthorized");
         require(intents[user].active, "No active intent");
+        uint256 amount = balances[user];
+        require(amount > 0, "No balance");
+        balances[user] = 0;
+        intents[user].active = false;
+        (bool ok, ) = jaineRouter.call{value: amount}(tradeData);
+        require(ok, "swap failed");
         emit TradeExecuted(user, storageReceiptHash, teeAttestation);
     }
 
