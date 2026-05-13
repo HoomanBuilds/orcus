@@ -6,8 +6,8 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { encryptIntentBrowser } from "@/lib/encrypt";
 import { vaultAbi } from "@/lib/vaultAbi";
 
-const VAULT = process.env.NEXT_PUBLIC_VAULT_ADDRESS as `0x${string}`;
-const AGENT_PUB = process.env.NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY as string;
+const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
+const AGENT_PUB = process.env.NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY || "";
 
 export default function StrategyPage() {
   const { address } = useAccount();

@@ -1,4 +1,3 @@
-"use client";
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { galileo } from "./chain";
 
