@@ -13,4 +13,5 @@ export const env = {
   agentEciesSk: required("AGENT_ECIES_PRIVATE_KEY"),
   vault: required("VAULT_ADDRESS"),
   storageIndexer: required("STORAGE_INDEXER"),
+  jaineRouter: required("JAINE_ROUTER"),
 };
