@@ -1,6 +1,9 @@
 export const vaultAbi = [
   {
-    inputs: [{ internalType: "address", name: "_teeAgentAddress", type: "address" }],
+    inputs: [
+      { internalType: "address", name: "_teeAgentAddress", type: "address" },
+      { internalType: "address", name: "_jaineRouter", type: "address" },
+    ],
     stateMutability: "nonpayable",
     type: "constructor",
   },
@@ -44,7 +47,7 @@ export const vaultAbi = [
   {
     inputs: [
       { internalType: "address", name: "user", type: "address" },
-      { internalType: "bytes", name: "", type: "bytes" },
+      { internalType: "bytes", name: "tradeData", type: "bytes" },
       { internalType: "bytes", name: "teeAttestation", type: "bytes" },
       { internalType: "bytes32", name: "storageReceiptHash", type: "bytes32" },
     ],
@@ -63,6 +66,13 @@ export const vaultAbi = [
       { internalType: "uint256", name: "depositAmount", type: "uint256" },
       { internalType: "bool", name: "active", type: "bool" },
     ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "jaineRouter",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
     stateMutability: "view",
     type: "function",
   },
