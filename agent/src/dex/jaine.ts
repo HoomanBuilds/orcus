@@ -5,10 +5,13 @@ const ERC20_ABI = [
   "function approve(address spender, uint256 amount) external returns (bool)",
 ];
 
+// Verified on Galileo (16602) via chainscan-galileo.0g.ai tx analysis + cast call
+export const ZER0_SWAP_ROUTER = "0x2d94e151fe547d9f97cf139cd1283ca14cce042b";
+export const ZER0_FACTORY     = "0x36f6414FF1df609214dDAbA71c84f18bcf00F67d";
+
 export const TESTNET_TOKENS = {
+  WOGN: "0x0fe9b43625fa7edd663adcec0728dd635e4abf7c", // Wrapped native OG (WETH9)
   USDT: "0x3ec8a8705be1d5ca90066b37ba62c4183b024ebf",
-  ETH:  "0x0fe9b43625fa7edd663adcec0728dd635e4abf7c",
-  BTC:  "0x36f6414ff1df609214ddaba71c84f18bcf00f67d",
 } as const;
 
 export const DEFAULT_POOL_FEE = 3000;
