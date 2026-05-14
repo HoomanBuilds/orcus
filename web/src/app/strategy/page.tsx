@@ -2,14 +2,24 @@
 import { useState } from "react";
 import { useAccount, useWriteContract } from "wagmi";
 import { parseEther } from "viem";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { encryptIntentBrowser } from "@/lib/encrypt";
 import { vaultAbi } from "@/lib/vaultAbi";
 import { SWAP_TARGETS, DEFAULT_TOKEN_OUT, type SwapTargetSymbol } from "@/lib/tokens";
 import Link from "next/link";
 
-const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
+const VAULT   = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
 const AGENT_PUB = process.env.NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY || "";
+
+const inputStyle: React.CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--border)",
+  color: "var(--text)",
+  borderRadius: 4,
+  padding: "8px 10px",
+  fontSize: 13,
+  width: "100%",
+  outline: "none",
+};
 
 export default function StrategyPage() {
   const { address } = useAccount();
@@ -22,15 +32,13 @@ export default function StrategyPage() {
   const [hash, setHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const selectedTarget = SWAP_TARGETS.find((t) => t.symbol === tokenOut);
+
   async function submit() {
     if (!address || !VAULT || !AGENT_PUB) return;
     setError(null);
     try {
-      const ciphertext = encryptIntentBrowser(AGENT_PUB, {
-        goal,
-        tokenOut,
-        ts: Date.now(),
-      });
+      const ciphertext = encryptIntentBrowser(AGENT_PUB, { goal, tokenOut, ts: Date.now() });
       const tx = await writeContractAsync({
         abi: vaultAbi,
         address: VAULT,
@@ -44,124 +52,122 @@ export default function StrategyPage() {
     }
   }
 
-  const selectedTarget = SWAP_TARGETS.find((t) => t.symbol === tokenOut);
-
   return (
-    <main className="mx-auto max-w-xl p-8 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Set Strategy</h1>
-        <ConnectButton />
-      </div>
+    <div className="mx-auto max-w-xl px-6 py-12 flex flex-col gap-6">
+      <h1 className="text-xl font-semibold" style={{ color: "var(--text)" }}>Set Strategy</h1>
 
       {!address && (
-        <p className="text-gray-500 text-sm">Connect your wallet to set a strategy.</p>
+        <p className="text-sm" style={{ color: "var(--muted)" }}>Connect your wallet to set a strategy.</p>
       )}
 
-      <div>
-        <label className="text-xs text-gray-500 block mb-1">Goal (encrypted — agent reads this inside TEE)</label>
+      {/* Goal */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs" style={{ color: "var(--muted)" }}>
+          Goal — encrypted in-browser, only readable inside the TEE
+        </label>
         <textarea
-          className="w-full border rounded p-2 font-mono text-sm"
           rows={2}
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
           placeholder="e.g. swap when price dips 1%"
+          style={{ ...inputStyle, fontFamily: "var(--font-geist-mono)", resize: "vertical" }}
         />
       </div>
 
-      <div>
-        <label className="text-xs text-gray-500 block mb-1">Swap OG → (select output token)</label>
+      {/* Token selector */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs" style={{ color: "var(--muted)" }}>Swap OG to</label>
         <div className="grid grid-cols-3 gap-2">
-          {SWAP_TARGETS.map((t) => (
-            <button
-              key={t.symbol}
-              onClick={() => setTokenOut(t.symbol)}
-              className={`border rounded p-2 text-sm text-left transition-colors ${
-                tokenOut === t.symbol
-                  ? "border-black bg-black text-white"
-                  : "border-gray-300 hover:border-gray-500"
-              }`}
-            >
-              <div className="font-semibold">{t.symbol}</div>
-              <div className="text-xs opacity-70 truncate">{t.label}</div>
-            </button>
-          ))}
+          {SWAP_TARGETS.map((t) => {
+            const active = tokenOut === t.symbol;
+            return (
+              <button
+                key={t.symbol}
+                onClick={() => setTokenOut(t.symbol)}
+                className="flex flex-col gap-0.5 p-3 rounded text-left transition-colors"
+                style={{
+                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: active ? "rgba(79,142,247,0.08)" : "var(--surface)",
+                  color: active ? "var(--accent)" : "var(--text)",
+                }}
+              >
+                <span className="text-sm font-semibold">{t.symbol}</span>
+                <span className="text-xs truncate" style={{ color: active ? "var(--accent)" : "var(--muted)", opacity: 0.8 }}>
+                  {t.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
         {selectedTarget && (
-          <p className="text-xs text-gray-400 mt-1 font-mono">
-            pool: {selectedTarget.pool.slice(0, 10)}…{selectedTarget.pool.slice(-6)}
+          <p className="text-xs font-mono" style={{ color: "var(--muted)" }}>
+            pool {selectedTarget.pool.slice(0, 10)}…{selectedTarget.pool.slice(-6)}
             {" · "}
             <a
               href={`https://chainscan-galileo.0g.ai/address/${selectedTarget.pool}`}
-              target="_blank"
-              rel="noreferrer"
+              target="_blank" rel="noreferrer"
+              style={{ color: "var(--accent)" }}
               className="underline"
             >
-              verify
+              verify ↗
             </a>
           </p>
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <label className="text-xs text-gray-500">Amount (OG)</label>
-          <input
-            className="w-full border rounded p-2 text-sm"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+      {/* Params */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs" style={{ color: "var(--muted)" }}>Amount (OG)</label>
+          <input value={amount} onChange={(e) => setAmount(e.target.value)} style={inputStyle} />
         </div>
-        <div>
-          <label className="text-xs text-gray-500">Max slippage (bps)</label>
-          <input
-            className="w-full border rounded p-2 text-sm"
-            type="number"
-            value={maxSlippage}
-            onChange={(e) => setMaxSlippage(Number(e.target.value))}
-          />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs" style={{ color: "var(--muted)" }}>Max slippage (bps)</label>
+          <input type="number" value={maxSlippage} onChange={(e) => setMaxSlippage(Number(e.target.value))} style={inputStyle} />
         </div>
-        <div>
-          <label className="text-xs text-gray-500">Stop loss (bps)</label>
-          <input
-            className="w-full border rounded p-2 text-sm"
-            type="number"
-            value={stopLoss}
-            onChange={(e) => setStopLoss(Number(e.target.value))}
-          />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs" style={{ color: "var(--muted)" }}>Stop loss (bps)</label>
+          <input type="number" value={stopLoss} onChange={(e) => setStopLoss(Number(e.target.value))} style={inputStyle} />
         </div>
       </div>
 
       <button
         disabled={isPending || !address || !VAULT || !AGENT_PUB}
         onClick={submit}
-        className="w-full rounded bg-black text-white px-4 py-2 disabled:opacity-40 hover:bg-gray-800 transition-colors"
+        className="w-full py-2.5 text-sm font-medium rounded transition-opacity"
+        style={{
+          background: "var(--accent)",
+          color: "#fff",
+          opacity: (isPending || !address) ? 0.4 : 1,
+          cursor: (isPending || !address) ? "not-allowed" : "pointer",
+          border: "none",
+        }}
       >
         {isPending ? "Submitting…" : `Encrypt & Deposit → ${tokenOut}`}
       </button>
 
-      {!VAULT && <p className="text-red-500 text-xs">NEXT_PUBLIC_VAULT_ADDRESS not set.</p>}
-      {!AGENT_PUB && <p className="text-red-500 text-xs">NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY not set.</p>}
-
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      {!VAULT    && <p className="text-xs" style={{ color: "#ef4444" }}>NEXT_PUBLIC_VAULT_ADDRESS not set.</p>}
+      {!AGENT_PUB && <p className="text-xs" style={{ color: "#ef4444" }}>NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY not set.</p>}
+      {error     && <p className="text-xs" style={{ color: "#ef4444" }}>{error}</p>}
 
       {hash && (
-        <p className="text-sm break-all">
-          tx:{" "}
+        <p className="text-xs font-mono break-all" style={{ color: "var(--muted)" }}>
+          tx{" "}
           <a
-            className="underline text-blue-600"
             href={`https://chainscan-galileo.0g.ai/tx/${hash}`}
-            target="_blank"
-            rel="noreferrer"
+            target="_blank" rel="noreferrer"
+            style={{ color: "var(--accent)" }}
+            className="underline"
           >
-            {hash}
+            {hash} ↗
           </a>
         </p>
       )}
 
-      <nav className="flex gap-4 text-sm pt-2 border-t">
-        <Link href="/" className="underline text-blue-600">Home</Link>
-        <Link href="/dashboard" className="underline text-blue-600">Dashboard</Link>
+      <nav className="flex gap-4 text-xs pt-2" style={{ borderTop: "1px solid var(--border)", color: "var(--muted)" }}>
+        <Link href="/dashboard" className="underline hover:text-white transition-colors">Dashboard</Link>
+        <Link href="/history"   className="underline hover:text-white transition-colors">Trade History</Link>
       </nav>
-    </main>
+    </div>
   );
 }
