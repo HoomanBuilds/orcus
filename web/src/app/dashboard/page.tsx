@@ -3,6 +3,7 @@ import { useAccount, useReadContract, useWriteContract, useWaitForTransactionRec
 import { formatEther } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { vaultAbi } from "@/lib/vaultAbi";
+import { SWAP_TARGETS } from "@/lib/tokens";
 import Link from "next/link";
 
 const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
@@ -109,6 +110,41 @@ export default function Dashboard() {
           )}
         </div>
       )}
+
+      <div className="border rounded p-4 space-y-3">
+        <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+          Available swap pairs (OG → X on Zer0 DEX)
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {SWAP_TARGETS.map((t) => (
+            <a
+              key={t.symbol}
+              href={`https://chainscan-galileo.0g.ai/address/${t.pool}`}
+              target="_blank"
+              rel="noreferrer"
+              className="border rounded p-2 text-xs hover:border-gray-500 transition-colors"
+            >
+              <div className="font-semibold text-sm">{t.symbol}</div>
+              <div className="text-gray-500 truncate">{t.label}</div>
+              <div className="text-gray-400 font-mono mt-1">
+                {t.pool.slice(0, 6)}…{t.pool.slice(-4)}
+              </div>
+            </a>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400">
+          All pairs route through{" "}
+          <a
+            href="https://chainscan-galileo.0g.ai/address/0x2d94e151fe547d9f97cf139cd1283ca14cce042b"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            Zer0 SwapRouter
+          </a>
+          {" · "}fee tier 0.3%
+        </p>
+      </div>
 
       <nav className="flex gap-4 text-sm">
         <Link href="/" className="underline text-blue-600">Home</Link>
