@@ -6,7 +6,12 @@ import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
 import { getMarketSnapshot } from "./market.js";
-import { buildSwapCalldata, TESTNET_TOKENS, DEFAULT_POOL_FEE } from "./dex/jaine.js";
+import {
+  buildSwapCalldata,
+  getLiquidPairs,
+  TESTNET_TOKENS,
+  DEFAULT_POOL_FEE,
+} from "./dex/jaine.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
@@ -18,13 +23,27 @@ async function main() {
   const broker = await createZGComputeNetworkBroker(wallet);
   const indexer = new Indexer(env.storageIndexer);
 
+  // Log all live pools at startup
+  const livePairs = await getLiquidPairs(provider);
   console.log("orcus agent listening on vault", env.vault);
+  console.log(
+    "live pools on Zer0:",
+    livePairs.map((p) => `${p.tokenIn}→${p.tokenOut} (${p.poolAddress})`),
+  );
+
+  // Primary swap: vault holds native OG → wrap → USDT
+  const primaryPair = livePairs.find(
+    (p) => p.tokenIn === "WOGN" && p.tokenOut === "USDT",
+  );
+  if (!primaryPair) {
+    throw new Error("WOGN/USDT pool not found on Zer0 — cannot proceed");
+  }
 
   vault.on("IntentSet", async (user: string, amount: bigint) => {
     try {
       console.log("intent from", user, "amount", amount.toString());
       const intent = await vault["intents"](user) as { encryptedGoal: string; maxSlippage: bigint };
-      const plain = decryptIntent<{ goal: string; maxSlippage: number }>(
+      const plain = decryptIntent<{ goal: string; tokenOut?: string; maxSlippage: number }>(
         env.agentEciesSk,
         intent.encryptedGoal,
       );
@@ -49,12 +68,26 @@ async function main() {
         32,
       ) as `0x${string}`;
 
+      // Resolve tokenOut: use intent preference if a live pool exists, else fall back to USDT
+      const wantedSymbol = (plain.tokenOut ?? "USDT") as keyof typeof TESTNET_TOKENS;
+      const resolvedPair =
+        livePairs.find((p) => p.tokenIn === "WOGN" && p.tokenOut === wantedSymbol) ??
+        primaryPair;
+
+      if (resolvedPair.tokenOut !== wantedSymbol) {
+        console.warn(`no live pool for WOGN→${wantedSymbol}, falling back to USDT`);
+      }
+
       const deadline = Math.floor(Date.now() / 1000) + 300;
+      // Apply maxSlippage from intent (bps): minAmountOut = amount * (10000 - slippage) / 10000
+      const slippageBps = intent.maxSlippage ?? 50n;
+      const minAmountOut = (amount * (10000n - slippageBps)) / 10000n;
+
       const tradeData = buildSwapCalldata({
         tokenIn: TESTNET_TOKENS.WOGN,
-        tokenOut: TESTNET_TOKENS.USDT,
+        tokenOut: TESTNET_TOKENS[resolvedPair.tokenOut],
         amountIn: amount,
-        minAmountOut: 0n,
+        minAmountOut,
         recipient: user,
         deadline,
         fee: DEFAULT_POOL_FEE,
