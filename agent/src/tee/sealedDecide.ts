@@ -40,18 +40,19 @@ export async function sealedDecide(
     }),
   });
 
-  const chatId = res.headers.get("ZG-Res-Key") ?? "";
-  const body = (await res.json()) as {
-    id: string;
-    choices: Array<{ message: { content: string } }>;
-    usage: unknown;
-  };
-  const resolvedChatId = chatId || body.id;
+  // Extract ChatID from header first (CLAUDE.md rule 4), body.id as fallback
+  const headerChatId = res.headers.get("ZG-Res-Key") ?? "";
 
+  // Parse body inside try so processResponse fires even on JSON parse failure
+  let body: { id?: string; choices?: Array<{ message: { content: string } }>; usage?: unknown } | undefined;
   try {
-    const content = body.choices[0]?.message?.content ?? "";
+    body = (await res.json()) as typeof body;
+    const resolvedChatId = headerChatId || body?.id || "";
+    const content = body?.choices?.[0]?.message?.content ?? "";
+    void resolvedChatId; // used in finally
     return JSON.parse(content) as Decision;
   } finally {
-    await broker.inference.processResponse(provider, resolvedChatId, body.usage);
+    const resolvedChatId = headerChatId || body?.id || "";
+    await broker.inference.processResponse(provider, resolvedChatId, body?.usage);
   }
 }

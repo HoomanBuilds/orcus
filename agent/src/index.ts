@@ -23,6 +23,12 @@ async function main() {
   const broker = await createZGComputeNetworkBroker(wallet);
   const indexer = new Indexer(env.storageIndexer);
 
+  // Watchdog: exit if RPC becomes unreachable so supervisor can restart
+  setInterval(async () => {
+    try { await provider.getBlockNumber(); }
+    catch { console.error("RPC unreachable — exiting for supervisor restart"); process.exit(1); }
+  }, 30_000);
+
   // Log all live pools at startup
   const livePairs = await getLiquidPairs(provider);
   console.log("orcus agent listening on vault", env.vault);
@@ -31,15 +37,20 @@ async function main() {
     livePairs.map((p) => `${p.tokenIn}→${p.tokenOut} (${p.poolAddress})`),
   );
 
-  // Primary swap: vault holds native OG → wrap → USDT
-  const primaryPair = livePairs.find(
-    (p) => p.tokenIn === "WOGN" && p.tokenOut === "USDT",
-  );
+  const primaryPair = livePairs.find((p) => p.tokenIn === "WOGN" && p.tokenOut === "USDT");
   if (!primaryPair) {
     throw new Error("WOGN/USDT pool not found on Zer0 — cannot proceed");
   }
 
+  // Prevent double-execution for the same user if events fire concurrently
+  const inFlight = new Set<string>();
+
   vault.on("IntentSet", async (user: string, amount: bigint) => {
+    if (inFlight.has(user)) {
+      console.warn("already processing intent for", user, "— skipping duplicate event");
+      return;
+    }
+    inFlight.add(user);
     try {
       console.log("intent from", user, "amount", amount.toString());
       const intent = await vault["intents"](user) as { encryptedGoal: string; maxSlippage: bigint };
@@ -63,12 +74,12 @@ async function main() {
         env.rpc,
       );
 
-      const receiptHash = zeroPadValue(
-        receiptHashRaw.startsWith("0x") ? receiptHashRaw : `0x${receiptHashRaw}`,
-        32,
-      ) as `0x${string}`;
+      const raw = receiptHashRaw.startsWith("0x") ? receiptHashRaw : `0x${receiptHashRaw}`;
+      const rawBytes = Buffer.from(raw.replace(/^0x/, ""), "hex");
+      if (rawBytes.length > 32) throw new Error(`rootHash too long: ${rawBytes.length} bytes`);
+      const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
 
-      // Resolve tokenOut: use intent preference if a live pool exists, else fall back to USDT
+      // Resolve tokenOut from intent preference; fall back to USDT
       const wantedSymbol = (plain.tokenOut ?? "USDT") as keyof typeof TESTNET_TOKENS;
       const resolvedPair =
         livePairs.find((p) => p.tokenIn === "WOGN" && p.tokenOut === wantedSymbol) ??
@@ -78,11 +89,11 @@ async function main() {
         console.warn(`no live pool for WOGN→${wantedSymbol}, falling back to USDT`);
       }
 
-      const deadline = Math.floor(Date.now() / 1000) + 300;
-      // Apply maxSlippage from intent (bps): minAmountOut = amount * (10000 - slippage) / 10000
-      const slippageBps = intent.maxSlippage ?? 50n;
+      // Use stored on-chain slippage (0n means no preference → use 50 bps default)
+      const slippageBps = intent.maxSlippage > 0n ? intent.maxSlippage : 50n;
       const minAmountOut = (amount * (10000n - slippageBps)) / 10000n;
 
+      const deadline = Math.floor(Date.now() / 1000) + 300;
       const tradeData = buildSwapCalldata({
         tokenIn: TESTNET_TOKENS.WOGN,
         tokenOut: TESTNET_TOKENS[resolvedPair.tokenOut],
@@ -98,11 +109,14 @@ async function main() {
         tradeData,
         "0x",
         receiptHash,
+        minAmountOut,
       );
       const r = await (tx as { wait(): Promise<{ hash: string }> }).wait();
       console.log("executed", r?.hash);
     } catch (e) {
-      console.error("loop error", e);
+      console.error("loop error for", user, e);
+    } finally {
+      inFlight.delete(user);
     }
   });
 }
