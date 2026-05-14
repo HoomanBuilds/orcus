@@ -10,8 +10,27 @@ export const vaultAbi = [
   {
     anonymous: false,
     inputs: [
-      { indexed: true, internalType: "address", name: "user", type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+      { indexed: true,  internalType: "address", name: "oldAgent", type: "address" },
+      { indexed: true,  internalType: "address", name: "newAgent", type: "address" },
+    ],
+    name: "AgentUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true,  internalType: "address", name: "user",   type: "address" },
+      { indexed: false, internalType: "uint256",  name: "amount", type: "uint256" },
+    ],
+    name: "Withdrawn",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true,  internalType: "address", name: "user",       type: "address" },
+      { indexed: false, internalType: "uint256",  name: "amount",     type: "uint256" },
+      { indexed: false, internalType: "bytes32",  name: "intentHash", type: "bytes32" },
     ],
     name: "IntentSet",
     type: "event",
@@ -46,10 +65,11 @@ export const vaultAbi = [
   },
   {
     inputs: [
-      { internalType: "address", name: "user", type: "address" },
-      { internalType: "bytes", name: "tradeData", type: "bytes" },
-      { internalType: "bytes", name: "teeAttestation", type: "bytes" },
+      { internalType: "address", name: "user",               type: "address" },
+      { internalType: "bytes",   name: "tradeData",          type: "bytes" },
+      { internalType: "bytes",   name: "teeAttestation",     type: "bytes" },
       { internalType: "bytes32", name: "storageReceiptHash", type: "bytes32" },
+      { internalType: "uint256", name: "minAmountOut",       type: "uint256" },
     ],
     name: "executeTradeWithProof",
     outputs: [],
@@ -73,6 +93,20 @@ export const vaultAbi = [
     inputs: [],
     name: "jaineRouter",
     outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "owner",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "paused",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
     stateMutability: "view",
     type: "function",
   },
