@@ -6,13 +6,9 @@ import Link from "next/link";
 
 const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
 
-interface TradeRow {
-  blockNumber: bigint;
-  txHash: string;
-  receiptHash: string;
-}
+interface TradeRow { blockNumber: bigint; txHash: string; receiptHash: string; }
 
-export default function History() {
+export default function HistoryPage() {
   const { address } = useAccount();
   const client = usePublicClient();
   const [rows, setRows] = useState<TradeRow[]>([]);
@@ -24,97 +20,160 @@ export default function History() {
     setLoading(true);
     setError(null);
     client
-      .getContractEvents({
-        address: VAULT,
-        abi: vaultAbi,
-        eventName: "TradeExecuted",
-        args: { user: address },
-        fromBlock: BigInt(0),
-      })
-      .then((logs) => {
-        setRows(
-          logs.map((log) => ({
-            blockNumber: log.blockNumber ?? BigInt(0),
-            txHash: log.transactionHash ?? "",
-            receiptHash: (log.args as { receiptHash?: string }).receiptHash ?? "",
-          }))
-        );
-      })
+      .getContractEvents({ address: VAULT, abi: vaultAbi, eventName: "TradeExecuted", args: { user: address }, fromBlock: BigInt(0) })
+      .then((logs) => setRows(logs.map((log) => ({
+        blockNumber: log.blockNumber ?? BigInt(0),
+        txHash: log.transactionHash ?? "",
+        receiptHash: (log.args as { receiptHash?: string }).receiptHash ?? "",
+      }))))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "fetch failed"))
       .finally(() => setLoading(false));
   }, [address, client]);
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold" style={{ color: "var(--text)" }}>Trade History</h1>
+    <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
+      <div className="px-6 md:px-12 lg:px-20 py-12">
+        <div className="max-w-6xl mx-auto flex flex-col gap-8">
 
-      {!address && <p className="text-sm" style={{ color: "var(--muted)" }}>Connect your wallet to view history.</p>}
-      {address && !VAULT && <p className="text-sm" style={{ color: "#ef4444" }}>NEXT_PUBLIC_VAULT_ADDRESS not set.</p>}
-      {loading && <p className="text-sm" style={{ color: "var(--muted)" }}>Loading events…</p>}
-      {error && <p className="text-sm" style={{ color: "#ef4444" }}>{error}</p>}
-      {address && VAULT && !loading && rows.length === 0 && !error && (
-        <p className="text-sm" style={{ color: "var(--muted)" }}>No trades executed yet.</p>
-      )}
+          {/* Header */}
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-[11px] tracking-[0.16em] text-black/30" style={{ fontFamily: "var(--font-data)" }}>ORCUS / HISTORY</p>
+              <h1 className="mt-2 text-4xl font-light tracking-tight text-[#111]">Trade history</h1>
+              {address && (
+                <p className="mt-2 text-[12px] text-black/30" style={{ fontFamily: "var(--font-data)" }}>
+                  {address.slice(0, 10)}…{address.slice(-6)}
+                </p>
+              )}
+            </div>
+            {address && rows.length > 0 && (
+              <div className="text-right">
+                <p className="text-3xl font-light text-[#111]" style={{ fontFamily: "var(--font-data)" }}>{rows.length}</p>
+                <p className="text-[11px] text-black/30 mt-0.5">total trades</p>
+              </div>
+            )}
+          </div>
 
-      {rows.length > 0 && (
-        <div
-          className="rounded overflow-hidden"
-          style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
-        >
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                {["Block", "Receipt hash", "Tx", "Proof"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium" style={{ color: "var(--muted)" }}>{h}</th>
+          {/* Image banner */}
+          <div className="relative overflow-hidden rounded-2xl border border-black/[0.07] bg-white min-h-[110px] flex items-end">
+            <img
+              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/coder-9bItvCegU6TXUqbX3tUXGBAtvkBkXp.png"
+              alt="" aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover object-center"
+              style={{
+                maskImage: "linear-gradient(to bottom, black 0%, black 40%, transparent 85%)",
+                WebkitMaskImage: "linear-gradient(to bottom, black 0%, black 40%, transparent 85%)",
+              }}
+            />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(255,255,255,0.97) 0%, rgba(255,255,255,0.55) 50%, transparent 100%)" }} />
+            <div className="relative z-10 p-8">
+              <h2 className="text-xl font-light text-[#111]">On-chain proof for every trade.</h2>
+              <p className="mt-1 text-sm text-black/40">Each receipt is stored permanently on 0G Storage. Click any receipt hash to verify.</p>
+            </div>
+          </div>
+
+          {/* States */}
+          {!address && (
+            <div className="rounded-2xl border border-black/[0.07] bg-white p-16 text-center">
+              <div className="w-12 h-12 mx-auto rounded-full border border-black/[0.07] bg-black/[0.02] flex items-center justify-center mb-4">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-black/25">
+                  <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
+                </svg>
+              </div>
+              <p className="text-sm text-black/35">Connect your wallet to view your trade history</p>
+            </div>
+          )}
+
+          {address && !VAULT && (
+            <div className="rounded-2xl border border-red-200 bg-red-50/50 p-5">
+              <p className="text-sm text-red-600">NEXT_PUBLIC_VAULT_ADDRESS not set.</p>
+            </div>
+          )}
+
+          {loading && (
+            <div className="rounded-2xl border border-black/[0.07] bg-white p-12 text-center">
+              <p className="text-sm text-black/30">Fetching your trade history…</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-2xl border border-red-200 bg-red-50/50 p-5">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
+          {address && VAULT && !loading && rows.length === 0 && !error && (
+            <div className="rounded-2xl border border-black/[0.07] bg-white p-16 text-center flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-full border border-black/[0.07] bg-black/[0.02] flex items-center justify-center">
+                <span className="text-black/20">0</span>
+              </div>
+              <p className="text-sm text-black/35">No trades executed yet</p>
+              <Link href="/strategy"
+                className="mt-2 inline-flex items-center gap-1 text-xs text-black/40 border border-black/[0.07] rounded-xl px-4 py-2 hover:border-black/20 hover:text-black/70 transition-all">
+                Set your first intent →
+              </Link>
+            </div>
+          )}
+
+          {/* Table */}
+          {rows.length > 0 && (
+            <div className="rounded-2xl border border-black/[0.07] bg-white overflow-hidden">
+              <div className="grid px-6 py-3 border-b border-black/[0.05]"
+                style={{ gridTemplateColumns: "1fr 2fr 1fr 1fr", gap: "1rem" }}>
+                {["Block", "Receipt hash", "Transaction", "Proof"].map((h) => (
+                  <span key={h} className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>{h}</span>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr
-                  key={i}
-                  className="transition-colors"
-                  style={{ borderBottom: i < rows.length - 1 ? "1px solid var(--border)" : "none" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  <td className="px-4 py-3 font-mono" style={{ color: "var(--muted)" }}>{row.blockNumber.toString()}</td>
-                  <td className="px-4 py-3 font-mono">
-                    <Link href={`/proof/${row.receiptHash}`} style={{ color: "var(--accent)" }} className="underline">
-                      {row.receiptHash.slice(0, 10)}…{row.receiptHash.slice(-6)}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 font-mono">
-                    <a
-                      href={`https://chainscan-galileo.0g.ai/tx/${row.txHash}`}
-                      target="_blank" rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                      className="underline"
-                    >
-                      {row.txHash.slice(0, 8)}… ↗
-                    </a>
-                  </td>
-                  <td className="px-4 py-3">
-                    <a
-                      href={`https://storagescan-galileo.0g.ai/file/${row.receiptHash}`}
-                      target="_blank" rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                      className="underline"
-                    >
-                      StorageScan ↗
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </div>
 
-      <nav className="flex gap-4 text-xs" style={{ color: "var(--muted)" }}>
-        <Link href="/dashboard" className="underline hover:text-white transition-colors">Dashboard</Link>
-        <Link href="/strategy"  className="underline hover:text-white transition-colors">Set Strategy</Link>
-      </nav>
+              {rows.map((row, i) => (
+                <div key={i}
+                  className="group grid px-6 py-4 items-center hover:bg-black/[0.015] transition-colors"
+                  style={{
+                    gridTemplateColumns: "1fr 2fr 1fr 1fr",
+                    gap: "1rem",
+                    borderBottom: i < rows.length - 1 ? "1px solid rgba(0,0,0,0.04)" : "none",
+                  }}>
+                  <span className="text-[12px] text-black/35" style={{ fontFamily: "var(--font-data)" }}>
+                    {row.blockNumber.toString()}
+                  </span>
+                  <Link href={`/proof/${row.receiptHash}`}
+                    className="text-[12px] text-[#111] hover:text-black/60 transition-colors underline overflow-hidden text-ellipsis whitespace-nowrap block"
+                    style={{ fontFamily: "var(--font-data)" }}>
+                    {row.receiptHash.slice(0, 16)}…{row.receiptHash.slice(-6)}
+                  </Link>
+                  <a href={`https://chainscan-galileo.0g.ai/tx/${row.txHash}`}
+                    target="_blank" rel="noreferrer"
+                    className="text-[12px] text-black/40 hover:text-black/70 transition-colors underline"
+                    style={{ fontFamily: "var(--font-data)" }}>
+                    {row.txHash.slice(0, 8)}… ↗
+                  </a>
+                  <a href={`https://storagescan-galileo.0g.ai/file/${row.receiptHash}`}
+                    target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[12px] text-black/30 hover:text-black/60 transition-colors"
+                    style={{ fontFamily: "var(--font-data)" }}>
+                    StorageScan ↗
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Footer nav */}
+          <div className="flex items-center gap-6 pt-4 border-t border-black/[0.06]">
+            {[
+              { label: "Dashboard", href: "/dashboard" },
+              { label: "Strategy Terminal", href: "/strategy" },
+              { label: "Protocol Activity", href: "/activity" },
+            ].map((l) => (
+              <Link key={l.label} href={l.href}
+                className="text-xs text-black/35 hover:text-black/65 transition-colors tracking-wide">
+                {l.label}
+              </Link>
+            ))}
+          </div>
+
+        </div>
+      </div>
     </div>
   );
 }
