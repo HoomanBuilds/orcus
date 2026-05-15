@@ -1,27 +1,177 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { OrcusLogo } from "./icons";
+
+const NAV_LINKS = [
+  { label: "Protocol", href: "#platform" },
+  { label: "Security", href: "#security" },
+  { label: "Build",    href: "#devex" },
+  { label: "Live",     href: "#live" },
+];
+
+const NAV_STYLE: React.CSSProperties = {
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  background: "rgba(245,244,240,0.30)",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06)",
+};
+
+// Custom wallet button that matches the navbar pill style
+function WalletButton() {
+  return (
+    <ConnectButton.Custom>
+      {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+        if (!mounted) return null;
+
+        if (!account) {
+          return (
+            <button
+              onClick={openConnectModal}
+              className="inline-flex items-center justify-center text-[11px] px-4 py-2 rounded-xl border border-black/10 bg-[#111] text-white hover:bg-[#333] transition-all duration-200 tracking-widest font-medium"
+            >
+              CONNECT
+            </button>
+          );
+        }
+
+        if (chain?.unsupported) {
+          return (
+            <button
+              onClick={openChainModal}
+              className="inline-flex items-center gap-1.5 text-[11px] px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-200 tracking-wide"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              Wrong network
+            </button>
+          );
+        }
+
+        return (
+          <button
+            onClick={openAccountModal}
+            className="inline-flex items-center gap-2 text-[11px] px-4 py-2 rounded-xl border border-black/10 bg-white hover:bg-black/[0.03] transition-all duration-200 tracking-wide"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-black/70 font-medium" style={{ fontFamily: "var(--font-data)" }}>
+              {account.displayName}
+            </span>
+          </button>
+        );
+      }}
+    </ConnectButton.Custom>
+  );
+}
 
 export function Navbar() {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+
   return (
-    <header
-      className="sticky top-0 z-50 flex items-center justify-between px-6"
-      style={{
-        height: 52,
-        background: "var(--bg)",
-        borderBottom: "1px solid var(--border)",
-      }}
-    >
-      <Link href="/" className="flex items-center gap-2.5" style={{ color: "var(--text)" }}>
-        <OrcusLogo size={22} />
-        <span className="font-semibold tracking-tight text-sm">Orcus</span>
-      </Link>
-      <ConnectButton
-        showBalance={false}
-        chainStatus="none"
-        accountStatus="address"
-      />
-    </header>
+    <div className="fixed top-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+      <div className="pointer-events-auto w-full max-w-4xl">
+
+        <nav
+          className="flex items-center justify-between px-5 py-3 rounded-2xl border border-black/[0.06]"
+          style={NAV_STYLE}
+        >
+          {/* Logo */}
+          <Link
+            href="/"
+            className="text-xs tracking-[0.25em] text-black/70 hover:text-black transition-colors shrink-0"
+            style={{ fontFamily: "var(--font-data)", fontWeight: 600 }}
+          >
+            ORCUS
+          </Link>
+
+          {/* Nav links */}
+          <div className="hidden md:flex items-center gap-6">
+            {NAV_LINKS.map(l => (
+              <a
+                key={l.label}
+                href={l.href}
+                className="text-[11px] text-black/55 hover:text-black transition-colors duration-200 tracking-wide"
+              >
+                {l.label}
+              </a>
+            ))}
+          </div>
+
+          {/* Right group */}
+          <div className="hidden md:flex items-center gap-2">
+            {/* Split pill: LAUNCH APP | DASHBOARD */}
+            <div className="flex items-center rounded-xl border border-black/10 overflow-hidden">
+              <Link
+                href="/strategy"
+                className="inline-flex items-center justify-center text-[11px] px-4 py-2 text-black/60 hover:text-black hover:bg-black/[0.03] transition-all duration-200 tracking-wide"
+              >
+                APP
+              </Link>
+              <span className="w-px h-4 bg-black/10 shrink-0" />
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center justify-center text-[11px] px-4 py-2 text-black/60 hover:text-black hover:bg-black/[0.03] transition-all duration-200 tracking-wide"
+              >
+                DASHBOARD
+              </Link>
+            </div>
+
+            {/* Wallet button */}
+            <WalletButton />
+          </div>
+
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setOpen(v => !v)}
+            className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-[5px] rounded-lg hover:bg-black/[0.04] transition-colors"
+            aria-label={open ? "Close menu" : "Open menu"}
+          >
+            <span className="block h-px bg-black/60 transition-all duration-300 origin-center" style={{ width: 18, transform: open ? "translateY(6px) rotate(45deg)" : "none" }} />
+            <span className="block h-px bg-black/60 transition-all duration-300" style={{ width: 18, opacity: open ? 0 : 1 }} />
+            <span className="block h-px bg-black/60 transition-all duration-300 origin-center" style={{ width: 18, transform: open ? "translateY(-6px) rotate(-45deg)" : "none" }} />
+          </button>
+        </nav>
+
+        {/* Mobile menu */}
+        <div
+          className="md:hidden mt-2 overflow-hidden transition-all duration-300 ease-in-out"
+          style={{ maxHeight: open ? "380px" : "0px", opacity: open ? 1 : 0 }}
+        >
+          <div className="rounded-2xl border border-black/[0.06] px-2 py-2 flex flex-col" style={NAV_STYLE}>
+            {NAV_LINKS.map(l => (
+              <a
+                key={l.label}
+                href={l.href}
+                onClick={close}
+                className="px-4 py-3 text-sm text-black/60 hover:text-black hover:bg-black/[0.03] rounded-xl transition-colors tracking-wide"
+              >
+                {l.label}
+              </a>
+            ))}
+            <div className="mt-1 px-2 pb-1 flex gap-2">
+              <Link
+                href="/strategy"
+                onClick={close}
+                className="flex flex-1 justify-center text-[11px] px-4 py-2.5 rounded-xl border border-black/10 text-black/60 hover:text-black hover:border-black/20 hover:bg-black/[0.03] transition-all duration-200 tracking-wide"
+              >
+                LAUNCH APP
+              </Link>
+              <Link
+                href="/dashboard"
+                onClick={close}
+                className="flex flex-1 justify-center text-[11px] px-4 py-2.5 rounded-xl border border-black/10 text-black/60 hover:text-black hover:border-black/20 hover:bg-black/[0.03] transition-all duration-200 tracking-wide"
+              >
+                DASHBOARD
+              </Link>
+            </div>
+            {/* Mobile connect button */}
+            <div className="mt-1 px-2 pb-1">
+              <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
   );
 }
