@@ -1,47 +1,236 @@
 @import "tailwindcss";
 
+/* ── Tokens ────────────────────────────────────────────────────────────── */
 :root {
-  --bg:      #0a0a0b;
-  --surface: #111113;
-  --border:  #1e1e21;
-  --accent:  #4f8ef7;
-  --text:    #f0f0f0;
-  --muted:   #6b6b72;
+  --bg:            #F5F4F0;
+  --surface:       rgba(255,255,255,0.70);
+  --surface-solid: #ffffff;
+  --surface-2:     rgba(250,249,247,0.90);
+  --border:        rgba(0,0,0,0.07);
+  --border-soft:   rgba(0,0,0,0.05);
+  --border-accent: rgba(0,0,0,0.15);
+  --accent:        #111111;
+  --accent-dim:    rgba(0,0,0,0.05);
+  --accent-glow:   rgba(0,0,0,0.08);
+  --text:          #111111;
+  --text-2:        rgba(0,0,0,0.45);
+  --muted:         rgba(0,0,0,0.30);
+  --green:         #16a34a;
+  --green-glow:    rgba(22,163,74,0.15);
+  --red:           #dc2626;
+
+  --font-display: var(--font-ibm-plex), var(--font-geist-sans), system-ui, sans-serif;
+  --font-body:    var(--font-ibm-plex), var(--font-geist-sans), system-ui, sans-serif;
+  --font-data:    var(--font-geist-mono), "Courier Prime", "Courier New", monospace;
+
+  --radius-card:  16px;
+  --radius-btn:   12px;
 }
 
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-data);
 }
 
-html {
-  color-scheme: dark;
-}
+/* ── Base ──────────────────────────────────────────────────────────────── */
+html { color-scheme: light; scroll-behavior: smooth; }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Dark scrollbar */
-::-webkit-scrollbar       { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
 
-/* Animations */
+/* ── Cards ─────────────────────────────────────────────────────────────── */
+.glass {
+  background: rgba(255,255,255,0.70);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: var(--radius-card);
+}
+
+.glass-accent {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(0,0,0,0.10);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.06),
+    0 8px 32px rgba(0,0,0,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+.bento-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: var(--radius-card);
+  transition: border-color 300ms ease, background-color 300ms ease;
+}
+.bento-card:hover {
+  border-color: rgba(0,0,0,0.14);
+  background: #fafaf8;
+}
+
+/* ── Typography helpers ────────────────────────────────────────────────── */
+.font-display { font-family: var(--font-display) !important; }
+.font-data    { font-family: var(--font-data) !important; font-variant-numeric: tabular-nums; }
+
+.label-caps {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(0,0,0,0.30);
+}
+
+.stat-num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* ── Chips ─────────────────────────────────────────────────────────────── */
+.chip-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(22,163,74,0.08);
+  color: #16a34a;
+  border: 1px solid rgba(22,163,74,0.22);
+  border-radius: 100px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.chip-active::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #16a34a;
+  animation: dot-pulse 1.8s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(22,163,74,0.5);
+}
+
+.chip-inactive {
+  display: inline-flex;
+  background: rgba(0,0,0,0.04);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 2px 10px;
+  font-size: 11px;
+}
+
+/* ── Table row hover ───────────────────────────────────────────────────── */
+.trow { transition: background 120ms ease; }
+.trow:hover { background: rgba(0,0,0,0.02); }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.btn-glow {
+  position: relative;
+  background: #111;
+  border: none;
+  border-radius: var(--radius-btn);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  transition: background 200ms ease, transform 120ms ease;
+}
+.btn-glow:hover  { background: #333; transform: translateY(-1px); }
+.btn-glow:active { transform: scale(0.98); }
+.btn-glow:disabled {
+  background: rgba(0,0,0,0.06);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Focus rings ───────────────────────────────────────────────────────── */
+.input-focus {
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.input-focus:focus {
+  outline: none;
+  border-color: rgba(0,0,0,0.30) !important;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.06) !important;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
-@keyframes pulse-dark {
-  0%, 100% { opacity: 0.35; }
-  50%       { opacity: 0.6; }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.85); }
+  50%       { opacity: 1;   transform: scale(1.15); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes marqueeLeft {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-33.333%); }
+}
+@keyframes marqueeRight {
+  from { transform: translateX(-33.333%); }
+  to   { transform: translateX(0); }
+}
+@keyframes rowSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
 }
 
-.animate-fade-up  { animation: fadeUp 200ms ease-out both; }
-.animate-pulse-dark { animation: pulse-dark 1.6s ease-in-out infinite; }
+.animate-fade-up  { animation: fadeUp  320ms cubic-bezier(0.22,1,0.36,1) both; }
+.animate-fade-in  { animation: fadeIn  200ms ease both; }
+
+.stagger > *:nth-child(1) { animation-delay:  0ms; }
+.stagger > *:nth-child(2) { animation-delay: 70ms; }
+.stagger > *:nth-child(3) { animation-delay:140ms; }
+.stagger > *:nth-child(4) { animation-delay:210ms; }
+.stagger > *:nth-child(5) { animation-delay:280ms; }
+
+.shimmer {
+  background: linear-gradient(90deg, var(--surface-solid) 25%, rgba(0,0,0,0.03) 50%, var(--surface-solid) 75%);
+  background-size: 200% auto;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

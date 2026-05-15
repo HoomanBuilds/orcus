@@ -1,5 +1,5 @@
 // Token addresses on 0G Galileo testnet (Chain ID 16602)
-// Verified via Zer0/Jaine factory getPool() calls — all have non-zero liquidity
+// Verified via Zer0/Jaine factory getPool() calls - all have non-zero liquidity
 
 export const WOGN_ADDRESS = "0x0fE9B43625fA7EdD663aDcEC0728DD635e4AbF7c";
 
