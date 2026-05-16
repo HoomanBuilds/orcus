@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="assets/logo-dark.png#gh-light-mode-only" alt="Orcus" width="80" />
+  <img src="assets/logo-light.png#gh-dark-mode-only" alt="Orcus" width="80" />
+</p>
+
 <h1 align="center">Orcus</h1>
 
 > An MEV-resistant dark pool agent that keeps your trading intent encrypted until settlement is final.
