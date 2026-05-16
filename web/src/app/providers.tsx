@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/lib/wagmi";
 import { orcusTheme } from "@/lib/rainbowkit-theme";
+import { ToastProvider } from "@/components/toast";
 import { useState } from "react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -13,7 +14,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
         <RainbowKitProvider theme={orcusTheme}>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
