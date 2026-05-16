@@ -10,6 +10,7 @@ export const TESTNET_TOKENS = {
   WOGN: "0x0fE9B43625fA7EdD663aDcEC0728DD635e4AbF7c",
   // Stablecoins
   USDT: "0xed0103a53069a347ed40290e0a069b46fd50ba05",
+  USDC: "0xf63c7CC79CD0b76399E56a432cd2aF9eD36D8740",
   // Cross-chain bridged assets
   BTC:  "0x8d5e064d2ef44c29ee349e71cf70f751ecd62892",
   ETH:  "0xb95b5953ff8ee5d5d9818cdbefe363ff2191318c",

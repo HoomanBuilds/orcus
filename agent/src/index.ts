@@ -38,11 +38,8 @@ async function main() {
     catch (e) { err("watchdog", "RPC unreachable — exiting for restart", e); process.exit(1); }
   }, 30_000);
 
-  const livePairs = await getLiquidPairs(provider);
-  log("boot", `live pools: ${livePairs.map(p => `${p.tokenIn}→${p.tokenOut}`).join(", ")}`);
-
-  const primaryPair = livePairs.find((p) => p.tokenIn === "WOGN" && p.tokenOut === "USDT");
-  if (!primaryPair) throw new Error("WOGN/USDT pool not found on Zer0");
+  const livePairs = await getLiquidPairs(provider).catch(() => []);
+  log("boot", `live pools: ${livePairs.length > 0 ? livePairs.map(p => `${p.tokenIn}→${p.tokenOut}`).join(", ") : "(using OrcusRouter)"}`);
 
   const inFlight = new Set<string>();
   const seen = new Set<string>();
@@ -93,22 +90,17 @@ async function main() {
       const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
       log("storage", `receipt=${receiptHash}`);
 
-      const wantedSymbol = (plain.tokenOut ?? "USDT") as keyof typeof TESTNET_TOKENS;
-      const resolvedPair =
-        livePairs.find((p) => p.tokenIn === "WOGN" && p.tokenOut === wantedSymbol) ?? primaryPair;
-      if (resolvedPair.tokenOut !== wantedSymbol) {
-        log("swap", `no live pool for WOGN→${wantedSymbol}, falling back to USDT`);
-      }
+      const wantedSymbol = (plain.tokenOut ?? "USDC") as keyof typeof TESTNET_TOKENS;
+      const tokenOut = TESTNET_TOKENS[wantedSymbol] ?? TESTNET_TOKENS.USDC;
 
       const deadline = Math.floor(Date.now() / 1000) + 300;
-      // Testnet pool has extremely low liquidity; use 0 slippage for demo
       const minAmountOut = 0n;
 
-      log("swap", `WOGN→${resolvedPair.tokenOut} amount=${amount} minOut=${minAmountOut}`);
+      log("swap", `WOGN→${wantedSymbol} amount=${amount} minOut=${minAmountOut}`);
 
       const tradeData = buildSwapCalldata({
         tokenIn: TESTNET_TOKENS.WOGN,
-        tokenOut: TESTNET_TOKENS[resolvedPair.tokenOut],
+        tokenOut: tokenOut,
         amountIn: amount,
         minAmountOut,
         recipient: user,
