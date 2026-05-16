@@ -14,4 +14,6 @@ export const env = {
   vault: required("VAULT_ADDRESS"),
   storageIndexer: required("STORAGE_INDEXER"),
   jaineRouter: required("JAINE_ROUTER"),
+  zgServiceUrl: required("ZG_SERVICE_URL"),
+  zgApiSecret: required("ZG_API_SECRET"),
 };
