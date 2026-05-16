@@ -6,7 +6,8 @@ interface Props {
 
 export default async function ProofViewer({ params }: Props) {
   const { hash } = await params;
-  const storageScanUrl = `https://storagescan-galileo.0g.ai/file/${hash}`;
+  const storageScanUrl = "https://storagescan-galileo.0g.ai/submissions";
+  const chainScanUrl = `https://chainscan-galileo.0g.ai/address/0xc624fFC2c9069a53e0D62CF5172fB10aDDA2D205`;
 
   return (
     <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
@@ -22,26 +23,55 @@ export default async function ProofViewer({ params }: Props) {
           {/* Hash card */}
           <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
             <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-3" style={{ fontFamily: "var(--font-data)" }}>
-              Storage receipt hash
+              Storage receipt hash (merkle root)
             </p>
             <p className="font-mono text-sm break-all text-[#111] leading-relaxed" style={{ fontFamily: "var(--font-data)" }}>
               {hash}
             </p>
+            <p className="mt-3 text-[11px] text-black/30">
+              This merkle root anchors the TEE decision receipt on 0G Storage. The full JSON receipt is permanently stored and verifiable.
+            </p>
           </div>
 
-          {/* StorageScan link */}
-          <a
-            href={storageScanUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
-          >
-            View on 0G StorageScan ↗
-          </a>
+          {/* Links */}
+          <div className="grid grid-cols-2 gap-3">
+            <a
+              href={storageScanUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
+            >
+              0G StorageScan ↗
+            </a>
+            <a
+              href={chainScanUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
+            >
+              Vault on ChainScan ↗
+            </a>
+          </div>
 
-          {/* iframe */}
-          <div className="rounded-2xl overflow-hidden border border-black/[0.07]" style={{ height: 480 }}>
-            <iframe src={storageScanUrl} className="w-full h-full" title="0G StorageScan receipt" />
+          {/* How it works */}
+          <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
+            <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-4" style={{ fontFamily: "var(--font-data)" }}>
+              Verification steps
+            </p>
+            <div className="flex flex-col gap-3 text-sm text-black/50 leading-relaxed">
+              <div className="flex gap-3">
+                <span className="text-[10px] text-black/25 mt-0.5" style={{ fontFamily: "var(--font-data)" }}>01</span>
+                <p>The receipt hash above is the merkle root of the decision JSON uploaded to 0G Storage.</p>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-[10px] text-black/25 mt-0.5" style={{ fontFamily: "var(--font-data)" }}>02</span>
+                <p>This hash is stored on-chain in the <code className="text-[12px] text-black/60 bg-black/[0.04] px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-data)" }}>TradeExecuted</code> event, binding the execution to its proof.</p>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-[10px] text-black/25 mt-0.5" style={{ fontFamily: "var(--font-data)" }}>03</span>
+                <p>Anyone can download the receipt from 0G Storage using this root hash and verify the TEE agent&apos;s decision was legitimate.</p>
+              </div>
+            </div>
           </div>
 
           {/* TEE attestation note */}
@@ -50,9 +80,7 @@ export default async function ProofViewer({ params }: Props) {
               TEE attestation
             </p>
             <p className="text-sm text-black/45 leading-relaxed">
-              Raw attestation bytes are stored in the on-chain{" "}
-              <code className="text-[12px] text-black/60 bg-black/[0.04] px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-data)" }}>TradeExecuted</code>
-              {" "}event. Full Intel TDX DCAP verification is post-MVP — bytes are preserved on-chain for independent audit.
+              The TEE inference runs inside an Intel TDX enclave via 0G Compute. Full DCAP attestation verification is post-MVP — the sealed execution guarantee is enforced by the 0G Compute network.
             </p>
           </div>
 

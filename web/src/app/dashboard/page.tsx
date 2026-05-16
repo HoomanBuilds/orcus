@@ -108,6 +108,8 @@ function DashboardContent() {
     query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
   });
 
+  const uniqueTraders = useMemo(() => new Set(executions.map((e) => e.user)).size, [executions]);
+
   useEffect(() => {
     if (isSuccess && txHash) {
       toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash });
@@ -122,7 +124,6 @@ function DashboardContent() {
   const isActive = intent?.[4] === true;
   const hasBalance = balance !== undefined && balance > 0n;
   const canWithdraw = !!address && !!VAULT && hasBalance && !isPending && !isConfirming;
-  const uniqueTraders = useMemo(() => new Set(executions.map((e) => e.user)).size, [executions]);
 
   const stats = [
     { label: "Vault balance", value: address && balance !== undefined ? `${(+formatEther(balance)).toFixed(4)} OG` : "—", sub: "your deposited collateral" },
@@ -341,7 +342,7 @@ function DashboardContent() {
                       <div className="flex gap-3">
                         <a href={`https://chainscan-galileo.0g.ai/tx/${ex.txHash}`} target="_blank" rel="noreferrer"
                           className="text-[11px] text-black/40 hover:text-black/70 transition-colors underline">tx</a>
-                        <a href={`https://storagescan-galileo.0g.ai/file/${ex.receiptHash}`} target="_blank" rel="noreferrer"
+                        <a href={`https://storagescan-galileo.0g.ai/submissions`} target="_blank" rel="noreferrer"
                           className="text-[11px] text-black/25 hover:text-black/55 transition-colors underline">proof</a>
                       </div>
                     </div>

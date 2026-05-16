@@ -124,7 +124,7 @@ export default function ActivityPage() {
                 <a href={`https://chainscan-galileo.0g.ai/tx/${ex.txHash}`} target="_blank" rel="noreferrer"
                   className="text-[12px] text-black/40 hover:text-black/70 transition-colors underline"
                   style={{ fontFamily: "var(--font-data)" }}>tx ↗</a>
-                <a href={`https://storagescan-galileo.0g.ai/file/${ex.receiptHash}`} target="_blank" rel="noreferrer"
+                <a href={`https://storagescan-galileo.0g.ai/submissions`} target="_blank" rel="noreferrer"
                   className="text-[12px] text-black/25 hover:text-black/55 transition-colors underline"
                   style={{ fontFamily: "var(--font-data)" }}>proof ↗</a>
               </div>

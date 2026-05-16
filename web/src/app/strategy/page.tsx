@@ -50,7 +50,7 @@ export default function StrategyPage() {
   const [goal, setGoal]         = useState("");
   const [tokenOut, setTokenOut] = useState<SwapTargetSymbol>(DEFAULT_TOKEN_OUT);
   const [amount, setAmount]     = useState("0.01");
-  const [slippage, setSlippage] = useState(50);
+  const [slippage, setSlippage] = useState(0);
   const [phase, setPhase]       = useState<Phase>("idle");
   const [cipher, setCipher]     = useState<string | null>(null);
   const [txHash, setTxHash]     = useState<string | null>(null);
