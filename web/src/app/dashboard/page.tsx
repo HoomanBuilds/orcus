@@ -1,14 +1,17 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, usePublicClient, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { formatEther } from "viem";
+import { useSearchParams } from "next/navigation";
 import { vaultAbi } from "@/lib/vaultAbi";
+import { VAULT } from "@/lib/vaultEvents";
+import { useTradeExecutedFeed, useIntentStatus } from "@/hooks/useVaultEvents";
 import { SWAP_TARGETS } from "@/lib/tokens";
 import { Skeleton } from "@/components/skeleton";
+import { useToast } from "@/components/toast";
+import { IntentStatusBanner } from "@/components/intent-status-banner";
 import Link from "next/link";
 import { WalletConnectPrompt } from "@/components/wallet-gate";
-
-const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
 
 // ── Seeded sparkline ──────────────────────────────────────────────────────────
 const SPARK_RAW = [38, 41, 39, 44, 48, 45, 52, 55, 51, 58, 62, 57, 63, 60, 67, 71, 68, 74, 78, 73, 79, 77, 83, 80, 86];
@@ -77,17 +80,21 @@ function Card({ children, className = "", style }: { children: React.ReactNode; 
   );
 }
 
-interface Execution { blockNumber: bigint; txHash: string; receiptHash: string; user: string; }
 
 export default function DashboardPage() {
+  return <Suspense><DashboardContent /></Suspense>;
+}
+
+function DashboardContent() {
   const { address } = useAccount();
-  const client = usePublicClient();
-  const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
+  const params = useSearchParams();
+  const { toast } = useToast();
+  const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
-  const [executions, setExecutions] = useState<Execution[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastPoll, setLastPoll] = useState<Date | null>(null);
+  const { data: executions = [], isLoading: loading, dataUpdatedAt } = useTradeExecutedFeed();
+  const { lifecycle, lastTrade } = useIntentStatus(address);
+  const lastPoll = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   const { data: balance, refetch: refetchBalance } = useReadContract({
     abi: vaultAbi, address: VAULT, functionName: "balances",
@@ -101,23 +108,14 @@ export default function DashboardPage() {
     query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
   });
 
-  const fetchEvents = useCallback(async () => {
-    if (!client || !VAULT) return;
-    try {
-      const logs = await client.getContractEvents({ address: VAULT, abi: vaultAbi, eventName: "TradeExecuted", fromBlock: BigInt(0) });
-      setExecutions(logs.reverse().slice(0, 20).map((l) => ({
-        blockNumber: l.blockNumber ?? BigInt(0),
-        txHash: l.transactionHash ?? "",
-        receiptHash: (l.args as { receiptHash?: string }).receiptHash ?? "",
-        user: (l.args as { user?: string }).user ?? "",
-      })));
-      setLastPoll(new Date());
-    } catch {}
-    finally { setLoading(false); }
-  }, [client]);
-
-  useEffect(() => { fetchEvents(); const id = setInterval(fetchEvents, 15_000); return () => clearInterval(id); }, [fetchEvents]);
-  if (isSuccess) { refetchBalance(); refetchIntent(); }
+  useEffect(() => {
+    if (isSuccess && txHash) {
+      toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash });
+      refetchBalance();
+      refetchIntent();
+      resetWrite();
+    }
+  }, [isSuccess, txHash, toast, refetchBalance, refetchIntent, resetWrite]);
 
   if (!address) return <WalletConnectPrompt page="dashboard" />;
 
@@ -154,6 +152,13 @@ export default function DashboardPage() {
               </span>
             </div>
           </div>
+
+          {/* Intent lifecycle banner */}
+          <IntentStatusBanner
+            lifecycle={params.get("intent") === "submitted" && lifecycle === "none" ? "pending" : lifecycle}
+            receiptHash={lastTrade?.receiptHash}
+            txHash={lastTrade?.txHash}
+          />
 
           {/* Stats row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

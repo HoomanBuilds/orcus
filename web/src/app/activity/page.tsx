@@ -1,42 +1,12 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { usePublicClient } from "wagmi";
-import { vaultAbi } from "@/lib/vaultAbi";
+import { useTradeExecutedFeed } from "@/hooks/useVaultEvents";
 import Link from "next/link";
 
-const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
 const POLL_MS = 15_000;
 
-interface Execution { blockNumber: bigint; txHash: string; receiptHash: string; user: string; }
-
 export default function ActivityPage() {
-  const client = usePublicClient();
-  const [executions, setExecutions] = useState<Execution[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastPoll, setLastPoll] = useState<Date | null>(null);
-
-  const fetchEvents = useCallback(async () => {
-    if (!client || !VAULT) return;
-    try {
-      const logs = await client.getContractEvents({ address: VAULT, abi: vaultAbi, eventName: "TradeExecuted", fromBlock: BigInt(0) });
-      setExecutions(
-        logs.reverse().slice(0, 50).map((l) => ({
-          blockNumber: l.blockNumber ?? BigInt(0),
-          txHash: l.transactionHash ?? "",
-          receiptHash: (l.args as { receiptHash?: string }).receiptHash ?? "",
-          user: (l.args as { user?: string }).user ?? "",
-        }))
-      );
-      setLastPoll(new Date());
-    } catch {}
-    finally { setLoading(false); }
-  }, [client]);
-
-  useEffect(() => {
-    fetchEvents();
-    const id = setInterval(fetchEvents, POLL_MS);
-    return () => clearInterval(id);
-  }, [fetchEvents]);
+  const { data: executions = [], isLoading: loading, dataUpdatedAt } = useTradeExecutedFeed();
+  const lastPoll = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   const uniqueTraders = new Set(executions.map((e) => e.user)).size;
   const isEmpty = !loading && executions.length === 0;

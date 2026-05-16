@@ -1,34 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useAccount, usePublicClient } from "wagmi";
-import { vaultAbi } from "@/lib/vaultAbi";
+import { useAccount } from "wagmi";
+import { useUserTradeExecuted } from "@/hooks/useVaultEvents";
+import { VAULT } from "@/lib/vaultEvents";
 import Link from "next/link";
-
-const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
-
-interface TradeRow { blockNumber: bigint; txHash: string; receiptHash: string; }
+import { WalletConnectPrompt } from "@/components/wallet-gate";
 
 export default function HistoryPage() {
   const { address } = useAccount();
-  const client = usePublicClient();
-  const [rows, setRows] = useState<TradeRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!address || !client || !VAULT) return;
-    setLoading(true);
-    setError(null);
-    client
-      .getContractEvents({ address: VAULT, abi: vaultAbi, eventName: "TradeExecuted", args: { user: address }, fromBlock: BigInt(0) })
-      .then((logs) => setRows(logs.map((log) => ({
-        blockNumber: log.blockNumber ?? BigInt(0),
-        txHash: log.transactionHash ?? "",
-        receiptHash: (log.args as { receiptHash?: string }).receiptHash ?? "",
-      }))))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "fetch failed"))
-      .finally(() => setLoading(false));
-  }, [address, client]);
+  const { data: trades = [], isLoading: loading, error: queryError } = useUserTradeExecuted(address);
+  const rows = trades.map((t) => ({ blockNumber: t.blockNumber, txHash: t.txHash, receiptHash: t.receiptHash }));
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "fetch failed") : null;
 
   return (
     <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
@@ -73,16 +54,7 @@ export default function HistoryPage() {
           </div>
 
           {/* States */}
-          {!address && (
-            <div className="rounded-2xl border border-black/[0.07] bg-white p-16 text-center">
-              <div className="w-12 h-12 mx-auto rounded-full border border-black/[0.07] bg-black/[0.02] flex items-center justify-center mb-4">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-black/25">
-                  <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
-                </svg>
-              </div>
-              <p className="text-sm text-black/35">Connect your wallet to view your trade history</p>
-            </div>
-          )}
+          {!address && <WalletConnectPrompt page="history" />}
 
           {address && !VAULT && (
             <div className="rounded-2xl border border-red-200 bg-red-50/50 p-5">

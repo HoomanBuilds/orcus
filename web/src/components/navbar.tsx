@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { galileo } from "@/lib/chain";
 
 const NAV_LINKS = [
   { label: "Protocol", href: "#platform" },
@@ -36,7 +37,7 @@ function WalletButton() {
           );
         }
 
-        if (chain?.unsupported) {
+        if (chain && chain.id !== galileo.id) {
           return (
             <button
               onClick={openChainModal}

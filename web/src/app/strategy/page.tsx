@@ -1,19 +1,19 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther, formatEther } from "viem";
+import { useRouter } from "next/navigation";
 import { encryptIntentBrowser } from "@/lib/encrypt";
 import { vaultAbi } from "@/lib/vaultAbi";
+import { VAULT } from "@/lib/vaultEvents";
 import { SWAP_TARGETS, DEFAULT_TOKEN_OUT, type SwapTargetSymbol } from "@/lib/tokens";
+import { useToast } from "@/components/toast";
 import Link from "next/link";
 import { WalletConnectPrompt } from "@/components/wallet-gate";
 
-const VAULT     = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
 const AGENT_PUB = process.env.NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY || "";
 
 type Phase = "idle" | "encrypting" | "submitting" | "done" | "error";
-
-interface Execution { blockNumber: bigint; txHash: string; receiptHash: string; user: string; }
 
 function Card({ children, className = "", style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -43,7 +43,8 @@ function Tag({ children }: { children: React.ReactNode }) {
 
 export default function StrategyPage() {
   const { address } = useAccount();
-  const client = usePublicClient();
+  const router = useRouter();
+  const { toast } = useToast();
   const { writeContractAsync } = useWriteContract();
 
   const [goal, setGoal]         = useState("");
@@ -54,7 +55,6 @@ export default function StrategyPage() {
   const [cipher, setCipher]     = useState<string | null>(null);
   const [txHash, setTxHash]     = useState<string | null>(null);
   const [errMsg, setErrMsg]     = useState<string | null>(null);
-  const [executions, setExecutions] = useState<Execution[]>([]);
 
   const { data: balance } = useReadContract({
     abi: vaultAbi, address: VAULT, functionName: "balances",
@@ -71,20 +71,15 @@ export default function StrategyPage() {
   const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: txHash as `0x${string}` | undefined });
 
   useEffect(() => {
-    if (!client || !VAULT) return;
-    client.getContractEvents({ address: VAULT, abi: vaultAbi, eventName: "TradeExecuted", fromBlock: BigInt(0) })
-      .then((logs) => {
-        setExecutions(logs.slice(-5).reverse().map((l) => ({
-          blockNumber: l.blockNumber ?? BigInt(0),
-          txHash: l.transactionHash ?? "",
-          receiptHash: (l.args as { receiptHash?: string }).receiptHash ?? "",
-          user: (l.args as { user?: string }).user ?? "",
-        })));
-      }).catch(() => {});
-  }, [client]);
+    if (txConfirmed && txHash) {
+      toast({ type: "success", title: "Intent submitted", description: "TEE agent will pick it up shortly", txHash });
+      router.push("/dashboard?intent=submitted");
+    }
+  }, [txConfirmed, txHash, toast, router]);
 
   const hasActive = intent?.[4] === true;
-  const canSubmit = !!address && !!VAULT && !!AGENT_PUB && !hasActive && phase === "idle";
+  const amountValid = !!amount && !isNaN(+amount) && +amount > 0;
+  const canSubmit = !!address && !!VAULT && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid;
 
   async function submit() {
     if (!canSubmit) return;
@@ -229,43 +224,11 @@ export default function StrategyPage() {
                 )}
               </Card>
 
-              {/* Recent executions */}
-              <Card className="flex-1">
-                <div className="px-5 py-3 border-b border-black/[0.05] flex items-center justify-between">
-                  <p className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Recent executions</p>
-                  <span className="text-[11px] text-black/25" style={{ fontFamily: "var(--font-data)" }}>{executions.length}</span>
-                </div>
-
-                {executions.length === 0 ? (
-                  <div className="px-5 py-10 text-center">
-                    <div className="w-10 h-10 mx-auto rounded-full border border-black/[0.07] bg-black/[0.02] flex items-center justify-center mb-3">
-                      <span className="text-black/20 text-sm">0</span>
-                    </div>
-                    <p className="text-sm text-black/30">No executions yet</p>
-                    <p className="text-[11px] text-black/20 mt-1">Submit an intent to be first</p>
-                  </div>
-                ) : executions.map((ex, i) => (
-                  <div key={i} className="px-5 py-3 hover:bg-black/[0.015] transition-colors"
-                    style={{ borderBottom: i < executions.length - 1 ? "1px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <div className="flex justify-between">
-                      <span className="text-[12px] text-black/50" style={{ fontFamily: "var(--font-data)" }}>
-                        {ex.user.slice(0, 6)}…{ex.user.slice(-4)}
-                      </span>
-                      <span className="text-[11px] text-black/25" style={{ fontFamily: "var(--font-data)" }}>#{ex.blockNumber.toString()}</span>
-                    </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-[11px] text-black/25" style={{ fontFamily: "var(--font-data)" }}>
-                        {ex.receiptHash.slice(0, 10)}…{ex.receiptHash.slice(-6)}
-                      </span>
-                      <div className="flex gap-3">
-                        <a href={`https://chainscan-galileo.0g.ai/tx/${ex.txHash}`} target="_blank" rel="noreferrer"
-                          className="text-[11px] text-black/40 underline hover:text-black/70 transition-colors">tx</a>
-                        <Link href={`/proof/${ex.receiptHash}`}
-                          className="text-[11px] text-black/25 underline hover:text-black/55 transition-colors">proof</Link>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              {/* Link to dashboard */}
+              <Card className="flex-1 flex items-center justify-center p-8">
+                <Link href="/dashboard" className="text-sm text-black/40 hover:text-black/70 transition-colors">
+                  View executions on Dashboard →
+                </Link>
               </Card>
             </div>
 

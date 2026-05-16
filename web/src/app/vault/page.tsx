@@ -1,16 +1,18 @@
 "use client";
+import { useEffect } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { formatEther } from "viem";
 import { vaultAbi } from "@/lib/vaultAbi";
+import { VAULT } from "@/lib/vaultEvents";
 import { SWAP_TARGETS } from "@/lib/tokens";
+import { useToast } from "@/components/toast";
 import Link from "next/link";
 import { WalletConnectPrompt } from "@/components/wallet-gate";
 
-const VAULT = (process.env.NEXT_PUBLIC_VAULT_ADDRESS || "") as `0x${string}`;
-
 export default function VaultPage() {
   const { address } = useAccount();
-  const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
+  const { toast } = useToast();
+  const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
   const { data: balance, refetch: refetchBalance } = useReadContract({
@@ -30,7 +32,14 @@ export default function VaultPage() {
     query: { enabled: !!VAULT },
   });
 
-  if (isSuccess) { refetchBalance(); refetchIntent(); }
+  useEffect(() => {
+    if (isSuccess && txHash) {
+      toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash });
+      refetchBalance();
+      refetchIntent();
+      resetWrite();
+    }
+  }, [isSuccess, txHash, toast, refetchBalance, refetchIntent, resetWrite]);
 
   const isActive = intent?.[4] === true;
   const hasBalance = balance !== undefined && balance > 0n;
