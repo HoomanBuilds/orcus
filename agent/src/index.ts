@@ -1,5 +1,5 @@
 import { Contract, JsonRpcProvider, Wallet, zeroPadValue } from "ethers";
-import { Indexer } from "@0glabs/0g-ts-sdk";
+import { Indexer } from "@0gfoundation/0g-ts-sdk";
 import { env } from "./env.js";
 import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
