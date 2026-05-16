@@ -28,6 +28,7 @@ function WalletButton() {
           return (
             <button
               onClick={openConnectModal}
+              type="button"
               className="inline-flex items-center justify-center text-[11px] px-4 py-2 rounded-xl border border-black/10 bg-[#111] text-white hover:bg-[#333] transition-all duration-200 tracking-widest font-medium"
             >
               CONNECT
@@ -39,6 +40,7 @@ function WalletButton() {
           return (
             <button
               onClick={openChainModal}
+              type="button"
               className="inline-flex items-center gap-1.5 text-[11px] px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-200 tracking-wide"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
@@ -50,6 +52,7 @@ function WalletButton() {
         return (
           <button
             onClick={openAccountModal}
+            type="button"
             className="inline-flex items-center gap-2 text-[11px] px-4 py-2 rounded-xl border border-black/10 bg-white hover:bg-black/[0.03] transition-all duration-200 tracking-wide"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
