@@ -7,7 +7,9 @@
     "test": "vitest run",
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "setup": "tsx src/scripts/setup.ts",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "bash patches/0g-ts-sdk-market-fix.sh"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +17,7 @@
   "type": "module",
   "private": "true",
   "dependencies": {
+    "@0gfoundation/0g-compute-ts-sdk": "^0.8.3",
     "@0glabs/0g-serving-broker": "^2.0.0",
     "@0glabs/0g-ts-sdk": "^0.3.3",
     "dotenv": "^17.4.2",
