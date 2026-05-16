@@ -30,6 +30,7 @@ This repository is the working testnet build, submitted for the 0G APAC Hackatho
 - [Quick Start](#quick-start)
 - [Tech Stack](#tech-stack)
 - [Security Model](#security-model)
+- [For Judges / Reviewers](#for-judges--reviewers)
 
 ---
 
@@ -303,6 +304,88 @@ The full cycle takes about 10-15 seconds from submission to settlement.
 | Agent misbehavior | Every execution includes a `storageReceiptHash` pointing to the full decision record on 0G Storage. Anyone can download and verify. |
 | Custodial risk | Users can withdraw their deposit at any time via `withdraw()`. No admin can move user funds. The vault is non-custodial. |
 | Key compromise | The ECIES private key is held only by the agent. In production this would live inside the TEE enclave itself, never touching disk. |
+
+---
+
+## For Judges / Reviewers
+
+### Network Setup
+
+To interact with Orcus you need MetaMask (or any EVM wallet) configured for 0G Galileo Testnet:
+
+| Field | Value |
+| ----- | ----- |
+| Network Name | 0G Galileo Testnet |
+| RPC URL | `https://evmrpc-testnet.0g.ai` |
+| Chain ID | `16602` |
+| Currency Symbol | OG |
+| Block Explorer | `https://chainscan-galileo.0g.ai` |
+
+### Getting Testnet OG
+
+You need OG tokens for gas and deposits:
+
+- [0G Faucet](https://faucet.0g.ai) (0.1 OG/day, requires X login)
+- [Chainlink Faucet](https://faucets.chain.link/0g-testnet-galileo) (alternative)
+
+### On-chain Proof of 0G Integration
+
+| Component | Evidence |
+| --------- | -------- |
+| 0G Chain | [StrategyVault on ChainScan](https://chainscan-galileo.0g.ai/address/0xc624fFC2c9069a53e0D62CF5172fB10aDDA2D205) |
+| 0G Compute | Agent calls sealed inference via 0G Compute Router (see `agent/src/tee/sealedDecide.ts`) |
+| 0G Storage | [Uploaded receipts on StorageScan](https://storagescan-galileo.0g.ai/submissions) (address `0x17A076d6cCaf37Bc9386EAB653A5EfAd8B07430C`) |
+| Trade execution | [Example tx](https://chainscan-galileo.0g.ai/tx/0x7484203319ccd3730779c8240b92b8a701e750ec1c2ebf993f409c7a0a00a73b) |
+
+### How 0G Modules Support the Product
+
+**0G Compute** is what makes MEV resistance possible. Without sealed inference, the agent's decision logic would be visible to the node operator, who could front-run trades or leak strategy information. 0G Compute's Intel TDX enclaves guarantee that the intent, market data, and decision never leave the enclave in plaintext.
+
+**0G Storage** provides the accountability layer. Every trade decision is uploaded as a JSON receipt with a merkle-verified root hash. This hash is then embedded in the on-chain `TradeExecuted` event, creating an immutable audit trail. Anyone can download the receipt and verify the agent acted according to the user's intent.
+
+**0G Chain** is where the entire application lives. The Strategy Vault, swap router, and settlement token are all native 0G contracts. The agent polls 0G Chain events, submits transactions to 0G Chain, and users interact through the dashboard connected to 0G Chain.
+
+### Reproducing the Demo Locally
+
+```bash
+# 1. Clone and install
+git clone <repo-url> && cd orcus
+cd contracts && npm install
+cd ../agent && npm install
+cd ../web && npm install
+
+# 2. Get testnet OG from faucet (need ~0.5 OG minimum)
+# Add 0G Galileo network to MetaMask using the details above
+
+# 3. Deploy contracts (or use the deployed addresses above)
+cd contracts
+npx hardhat run scripts/deploy-demo.js --network galileo
+
+# 4. Configure agent
+cd ../agent
+# Copy .env.example to .env and fill in:
+#   AGENT_PRIVATE_KEY, VAULT_ADDRESS, STORAGE_INDEXER, ZG_SERVICE_URL, ZG_API_SECRET
+
+# 5. Run agent
+npm run start
+
+# 6. Run dashboard
+cd ../web
+# Copy .env.example to .env and fill in:
+#   NEXT_PUBLIC_VAULT_ADDRESS, NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY
+npm run dev
+
+# 7. Open http://localhost:3000, connect wallet, go to /strategy, submit an intent
+# The agent will detect it within 4 seconds and execute the full flow
+```
+
+### What to Look For in the Demo
+
+1. The ciphertext on-chain (check the `depositAndSetIntent` tx on ChainScan - the first arg is opaque encrypted bytes)
+2. The agent terminal showing decrypt, TEE inference, storage upload, and swap execution in sequence
+3. oUSDC arriving in the user's wallet after execution
+4. The `TradeExecuted` event on ChainScan containing the storage receipt hash
+5. The receipt files on StorageScan uploaded by the agent
 
 ---
 
