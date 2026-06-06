@@ -7,6 +7,7 @@ import { writeReceipt } from "./storage/writeReceipt.js";
 import { getMarketSnapshot } from "./market.js";
 import { TESTNET_TOKENS } from "./dex/jaine.js";
 import { signExecParams } from "./sign/execParams.js";
+import { getOgPriceScaled } from "./price/binance.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
@@ -82,6 +83,12 @@ async function main() {
       if (rawBytes.length > 32) throw new Error(`rootHash too long: ${rawBytes.length} bytes`);
       const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
       log("storage", `receipt=${receiptHash}`);
+
+      const oracleAddr = await vault["oracle"]() as string;
+      const oracle = new Contract(oracleAddr, ["function setPrice(uint256)"], wallet);
+      const priceScaled = await getOgPriceScaled();
+      log("price", `pushing 0G/USD=${priceScaled.toString()} to oracle ${oracleAddr}`);
+      await (await oracle["setPrice"](priceScaled) as { wait(): Promise<unknown> }).wait();
 
       const wantedSymbol = (plain.tokenOut ?? "USDC") as keyof typeof TESTNET_TOKENS;
       const tokenOut = TESTNET_TOKENS[wantedSymbol] ?? TESTNET_TOKENS.USDC;
