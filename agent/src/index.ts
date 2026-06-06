@@ -1,6 +1,7 @@
 import { Contract, JsonRpcProvider, Wallet, zeroPadValue } from "ethers";
 import { Indexer } from "@0gfoundation/0g-ts-sdk";
 import { env } from "./env.js";
+import { resolveChain } from "./chains.js";
 import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
@@ -20,21 +21,17 @@ function err(tag: string, msg: string, e?: unknown) {
 }
 
 async function main() {
-  const provider = new JsonRpcProvider(env.rpc);
+  const chain = resolveChain();
+  const provider = new JsonRpcProvider(chain.rpc);
   const wallet = new Wallet(env.agentPk, provider);
-  const vault = new Contract(env.vault, vaultAbi as never[], wallet);
+  const vault = new Contract(chain.vault, vaultAbi as never[], wallet);
   const indexer = new Indexer(env.storageIndexer);
 
-  log("boot", `vault=${env.vault}`);
+  log("boot", `chain=${chain.name} (${chain.chainId}) vault=${chain.vault}`);
   log("boot", `agent=${wallet.address}`);
+  log("boot", `settlement token = ${chain.usdc} | priceMode=${chain.priceMode}`);
 
-  const routerAddr = await vault["swapRouter"]() as string;
-  const settlementToken = await new Contract(
-    routerAddr,
-    ["function usdc() view returns (address)"],
-    provider,
-  )["usdc"]() as string;
-  log("boot", `settlement token (oUSDC) = ${settlementToken}`);
+  const settlementToken = chain.usdc;
 
   // Watchdog
   setInterval(async () => {
@@ -83,7 +80,7 @@ async function main() {
         null,
         wallet,
         { user, decision, ts: Date.now() },
-        env.rpc,
+        chain.rpc,
       );
       const raw = receiptHashRaw.startsWith("0x") ? receiptHashRaw : `0x${receiptHashRaw}`;
       const rawBytes = Buffer.from(raw.replace(/^0x/, ""), "hex");
@@ -91,11 +88,13 @@ async function main() {
       const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
       log("storage", `receipt=${receiptHash}`);
 
-      const oracleAddr = await vault["oracle"]() as string;
-      const oracle = new Contract(oracleAddr, ["function setPrice(uint256)"], wallet);
-      const priceScaled = await getOgPriceScaled();
-      log("price", `pushing 0G/USD=${priceScaled.toString()} to oracle ${oracleAddr}`);
-      await (await oracle["setPrice"](priceScaled) as { wait(): Promise<unknown> }).wait();
+      if (chain.priceMode === "agent-push") {
+        const oracleAddr = await vault["oracle"]() as string;
+        const oracle = new Contract(oracleAddr, ["function setPrice(uint256)"], wallet);
+        const priceScaled = await getOgPriceScaled();
+        log("price", `pushing 0G/USD=${priceScaled.toString()} to oracle ${oracleAddr}`);
+        await (await oracle["setPrice"](priceScaled) as { wait(): Promise<unknown> }).wait();
+      }
 
       // The mock router settles only in the deployed oUSDC; the user's tokenOut
       // preference is cosmetic on the mock (real multi-token only on real DEX chains).
@@ -107,13 +106,13 @@ async function main() {
       const params = {
         user,
         tokenOut,
-        fee: 3000,
+        fee: chain.poolFee,
         agentMinOut: 0n,
         deadline,
         receiptHash,
         nonce,
       };
-      const signature = await signExecParams(wallet, env.chainId, env.vault, params);
+      const signature = await signExecParams(wallet, chain.chainId, chain.vault, params);
 
       log("swap", `executeTrade requested=${requested} settle=oUSDC(${tokenOut}) nonce=${nonce}`);
       const tx = await vault["executeTrade"](params, signature);
@@ -132,14 +131,14 @@ async function main() {
 
   // Backfill: scan in 500-block chunks (Galileo RPC silently caps large ranges)
   const CHUNK = 500;
-  const LOOKBACK = 5_000;
+  const LOOKBACK = chain.lookbackBlocks;
   log("backfill", `scanning last ${LOOKBACK} blocks in ${CHUNK}-block chunks`);
   const usersFound = new Set<string>();
   try {
     for (let hi = currentBlock; hi > currentBlock - LOOKBACK; hi -= CHUNK) {
       const lo = Math.max(0, hi - CHUNK + 1);
       const pastLogs = await provider.getLogs({
-        address: env.vault,
+        address: chain.vault,
         topics: [intentSetTopic],
         fromBlock: lo,
         toBlock: hi,
@@ -176,7 +175,7 @@ async function main() {
       const toBlock = await provider.getBlockNumber();
       if (toBlock < fromBlock) return;
       const logs = await provider.getLogs({
-        address: env.vault,
+        address: chain.vault,
         topics: [intentSetTopic],
         fromBlock,
         toBlock,
@@ -193,7 +192,7 @@ async function main() {
     } catch (e) {
       err("poll", "poll error", e);
     }
-  }, 4_000);
+  }, chain.pollIntervalMs);
 }
 
 main().catch((e) => {
