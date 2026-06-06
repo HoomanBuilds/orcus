@@ -15,17 +15,14 @@ export default function VaultPage() {
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
-  const { data: balance, refetch: refetchBalance } = useReadContract({
-    abi: vaultAbi, address: VAULT, functionName: "balances",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
-  });
-
-  const { data: intent, refetch: refetchIntent } = useReadContract({
+  const { data: intentRaw, refetch: refetchBalance } = useReadContract({
     abi: vaultAbi, address: VAULT, functionName: "intents",
     args: address ? [address] : undefined,
     query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
   });
+  const balance = (intentRaw?.[2] ?? 0n) as bigint;
+  const intent = intentRaw;
+  const refetchIntent = refetchBalance;
 
   const { data: paused } = useReadContract({
     abi: vaultAbi, address: VAULT, functionName: "paused",
@@ -84,7 +81,7 @@ export default function VaultPage() {
             {[
               { label: "Balance",   value: address && balance !== undefined ? `${(+formatEther(balance)).toFixed(4)} OG` : "—" },
               { label: "Intent",    value: !address ? "—" : isActive ? "Active" : "None", green: isActive },
-              { label: "Slippage",  value: isActive && intent ? `${intent[1].toString()} bps` : "—" },
+              { label: "Slippage",  value: isActive && intent ? `${intent[3].toString()} bps` : "—" },
             ].map((s) => (
               <div key={s.label} className="rounded-2xl border border-black/[0.07] bg-white p-6">
                 <p className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>{s.label}</p>
@@ -150,8 +147,7 @@ export default function VaultPage() {
                       { label: "Your address",    value: `${address.slice(0, 12)}…${address.slice(-6)}` },
                       { label: "Deposited",       value: balance !== undefined ? `${(+formatEther(balance)).toFixed(6)} OG` : "Loading…" },
                       ...(isActive && intent ? [
-                        { label: "Max slippage",  value: `${intent[1].toString()} bps` },
-                        { label: "Stop loss",     value: `${intent[2].toString()} bps` },
+                        { label: "Max slippage",  value: `${intent[3].toString()} bps` },
                       ] : []),
                     ].map((f) => (
                       <div key={f.label} className="flex justify-between items-center px-6 py-4">

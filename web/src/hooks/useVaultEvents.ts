@@ -44,19 +44,13 @@ export function useIntentStatus(address: `0x${string}` | undefined): {
     query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
   });
 
-  const { data: balance } = useReadContract({
-    abi: vaultAbi, address: VAULT, functionName: "balances",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
-  });
-
   const { data: trades } = useUserTradeExecuted(address);
 
   if (!address || !intent) return { lifecycle: "none", lastTrade: null };
 
   const isActive = intent[4] === true;
   const hasTrade = (trades?.length ?? 0) > 0;
-  const hasBalance = (balance ?? 0n) > 0n;
+  const hasBalance = ((intent[2] as bigint) ?? 0n) > 0n;
   const lastTrade = trades?.[0] ? { receiptHash: trades[0].receiptHash, txHash: trades[0].txHash } : null;
 
   if (isActive) return { lifecycle: "pending", lastTrade };

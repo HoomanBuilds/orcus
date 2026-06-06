@@ -96,17 +96,14 @@ function DashboardContent() {
   const { lifecycle, lastTrade } = useIntentStatus(address);
   const lastPoll = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
-  const { data: balance, refetch: refetchBalance } = useReadContract({
-    abi: vaultAbi, address: VAULT, functionName: "balances",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
-  });
-
-  const { data: intent, refetch: refetchIntent } = useReadContract({
+  const { data: intentRaw, refetch: refetchBalance } = useReadContract({
     abi: vaultAbi, address: VAULT, functionName: "intents",
     args: address ? [address] : undefined,
     query: { enabled: !!address && !!VAULT, refetchInterval: 8_000 },
   });
+  const balance = (intentRaw?.[2] ?? 0n) as bigint;
+  const intent = intentRaw;
+  const refetchIntent = refetchBalance;
 
   const uniqueTraders = useMemo(() => new Set(executions.map((e) => e.user)).size, [executions]);
 
@@ -227,8 +224,7 @@ function DashboardContent() {
                     <div className="grid grid-cols-3 divide-x divide-black/[0.05]">
                       {[
                         { label: "Intent", value: isActive ? "Active" : "None", green: isActive },
-                        { label: "Slippage", value: isActive && intent ? `${intent[1].toString()} bps` : "—" },
-                        { label: "Stop loss", value: isActive && intent ? `${intent[2].toString()} bps` : "—" },
+                        { label: "Slippage", value: isActive && intent ? `${intent[3].toString()} bps` : "—" },
                       ].map((f) => (
                         <div key={f.label} className="px-4 py-4">
                           <p className="text-[10px] tracking-[0.14em] uppercase text-black/25" style={{ fontFamily: "var(--font-data)" }}>{f.label}</p>

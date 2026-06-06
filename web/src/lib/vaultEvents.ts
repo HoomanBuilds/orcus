@@ -17,6 +17,8 @@ export interface TradeExecution {
   txHash: string;
   receiptHash: string;
   user: string;
+  tokenOut: string;
+  amountOut: bigint;
 }
 
 export async function fetchTradeExecuted(
@@ -31,12 +33,17 @@ export async function fetchTradeExecuted(
     fromBlock,
     ...(user ? { args: { user } } : {}),
   });
-  return logs.reverse().map((l) => ({
-    blockNumber: l.blockNumber ?? 0n,
-    txHash: l.transactionHash ?? "",
-    receiptHash: (l.args as { receiptHash?: string }).receiptHash ?? "",
-    user: (l.args as { user?: string }).user ?? "",
-  }));
+  return logs.reverse().map((l) => {
+    const args = l.args as { user?: string; tokenOut?: string; amountOut?: bigint; receiptHash?: string };
+    return {
+      blockNumber: l.blockNumber ?? 0n,
+      txHash: l.transactionHash ?? "",
+      receiptHash: args.receiptHash ?? "",
+      user: args.user ?? "",
+      tokenOut: args.tokenOut ?? "",
+      amountOut: args.amountOut ?? 0n,
+    };
+  });
 }
 
 export const tradeExecutedKeys = {
