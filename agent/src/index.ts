@@ -5,12 +5,8 @@ import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
 import { getMarketSnapshot } from "./market.js";
-import {
-  buildSwapCalldata,
-  getLiquidPairs,
-  TESTNET_TOKENS,
-  DEFAULT_POOL_FEE,
-} from "./dex/jaine.js";
+import { TESTNET_TOKENS } from "./dex/jaine.js";
+import { signExecParams } from "./sign/execParams.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
@@ -38,9 +34,6 @@ async function main() {
     catch (e) { err("watchdog", "RPC unreachable — exiting for restart", e); process.exit(1); }
   }, 30_000);
 
-  const livePairs = await getLiquidPairs(provider).catch(() => []);
-  log("boot", `live pools: ${livePairs.length > 0 ? livePairs.map(p => `${p.tokenIn}→${p.tokenOut}`).join(", ") : "(using OrcusRouter)"}`);
-
   const inFlight = new Set<string>();
   const seen = new Set<string>();
 
@@ -55,7 +48,7 @@ async function main() {
     try {
       log("intent", `user=${user} amount=${amount.toString()}`);
 
-      const intent = await vault["intents"](user) as { encryptedGoal: string; maxSlippage: bigint };
+      const intent = await vault["intents"](user) as { encryptedGoal: string };
       const plain = decryptIntent<{ goal: string; tokenOut?: string; maxSlippage: number }>(
         env.agentEciesSk,
         intent.encryptedGoal,
@@ -94,22 +87,20 @@ async function main() {
       const tokenOut = TESTNET_TOKENS[wantedSymbol] ?? TESTNET_TOKENS.USDC;
 
       const deadline = Math.floor(Date.now() / 1000) + 300;
-      const minAmountOut = 0n;
-
-      log("swap", `WOGN→${wantedSymbol} amount=${amount} minOut=${minAmountOut}`);
-
-      const tradeData = buildSwapCalldata({
-        tokenIn: TESTNET_TOKENS.WOGN,
-        tokenOut: tokenOut,
-        amountIn: amount,
-        minAmountOut,
-        recipient: user,
+      const nonce = await vault["intentNonce"](user) as bigint;
+      const params = {
+        user,
+        tokenOut,
+        fee: 3000,
+        agentMinOut: 0n,
         deadline,
-        fee: DEFAULT_POOL_FEE,
-      });
+        receiptHash,
+        nonce,
+      };
+      const signature = await signExecParams(wallet, env.chainId, env.vault, params);
 
-      log("swap", "sending executeTradeWithProof...");
-      const tx = await vault["executeTradeWithProof"](user, tradeData, "0x", receiptHash, minAmountOut);
+      log("swap", `executeTrade tokenOut=${wantedSymbol} nonce=${nonce}`);
+      const tx = await vault["executeTrade"](params, signature);
       const r = await (tx as { wait(): Promise<{ hash: string }> }).wait();
       log("swap", `executed tx=${r?.hash}`);
     } catch (e) {
@@ -144,10 +135,10 @@ async function main() {
         const user = parsed.args[0] as string;
         if (usersFound.has(user)) continue;
         usersFound.add(user);
-        const onChain = await vault["intents"](user) as { active: boolean; depositAmount: bigint };
+        const onChain = await vault["intents"](user) as { active: boolean; amountIn: bigint };
         if (!onChain.active) { log("backfill", `${user} already settled`); continue; }
         log("backfill", `active intent for ${user}`);
-        await processIntentEvent(user, onChain.depositAmount, log_.transactionHash);
+        await processIntentEvent(user, onChain.amountIn, log_.transactionHash);
       }
     }
   } catch (e) {
@@ -156,10 +147,10 @@ async function main() {
 
   // Fallback: directly check agent wallet (covers case where agent == user in testing)
   if (!usersFound.has(wallet.address)) {
-    const selfIntent = await vault["intents"](wallet.address) as { active: boolean; depositAmount: bigint };
+    const selfIntent = await vault["intents"](wallet.address) as { active: boolean; amountIn: bigint };
     if (selfIntent.active) {
       log("backfill", `direct check: active intent on agent wallet ${wallet.address}`);
-      await processIntentEvent(wallet.address, selfIntent.depositAmount, `self-${Date.now()}`);
+      await processIntentEvent(wallet.address, selfIntent.amountIn, `self-${Date.now()}`);
     }
   }
 
