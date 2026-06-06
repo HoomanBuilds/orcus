@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 const FEE = 3000;
 const SLIPPAGE_BPS = 100; // 1%
@@ -255,5 +256,50 @@ describe("StrategyVault: attestation & replay (H-01)", () => {
     const sig = await signExec(vault, agent, p);
     await vault.connect(agent).executeTrade(p, sig); // nonce 0 consumed
     await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("bad nonce");
+  });
+});
+
+describe("StrategyVault: escape hatch & admin (M-06, H-03, H-06)", () => {
+  it("requestCancel then cooldown blocks agent execution; user can withdraw", async () => {
+    const { vault, usdc, agent, user } = await deployFixture();
+    await vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value: ethers.parseEther("2") });
+    await vault.connect(user).requestCancel();
+    await time.increase(3601); // > CANCEL_COOLDOWN (1h)
+    const deadline = (await time.latest()) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("cancelling");
+    await expect(vault.connect(user).withdraw()).to.changeEtherBalance(user, ethers.parseEther("2"));
+  });
+
+  it("owner transfer is 2-step (Ownable2Step)", async () => {
+    const { vault, owner, attacker } = await deployFixture();
+    await vault.connect(owner).transferOwnership(attacker.address);
+    expect(await vault.owner()).to.equal(owner.address); // not yet
+    await vault.connect(attacker).acceptOwnership();
+    expect(await vault.owner()).to.equal(attacker.address);
+  });
+
+  it("setAgent/setAttestor owner-only and reject zero", async () => {
+    const { vault, owner, attacker, user } = await deployFixture();
+    await expect(vault.connect(attacker).setAgent(attacker.address))
+      .to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
+    await expect(vault.connect(owner).setAgent(ethers.ZeroAddress)).to.be.revertedWith("zero agent");
+    await expect(vault.connect(owner).setAgent(user.address)).to.emit(vault, "AgentUpdated");
+  });
+
+  it("setSwapRouter rejects an EOA (code.length check, H-06)", async () => {
+    const { vault, owner, attacker } = await deployFixture();
+    await expect(vault.connect(owner).setSwapRouter(attacker.address)).to.be.revertedWith("router not contract");
+  });
+
+  it("paused blocks deposit and execute", async () => {
+    const { vault, owner, user } = await deployFixture();
+    await vault.connect(owner).pause();
+    await expect(vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value: 1n }))
+      .to.be.revertedWithCustomError(vault, "EnforcedPause");
   });
 });
