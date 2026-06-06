@@ -114,3 +114,53 @@ describe("StrategyVault: deposits & withdraw", () => {
     await expect(vault.connect(user).withdraw()).to.be.revertedWith("nothing");
   });
 });
+
+describe("StrategyVault: execution (C-01, happy path)", () => {
+  async function setup() {
+    const f = await deployFixture();
+    const value = ethers.parseEther("2");
+    await f.vault.connect(f.user).depositNative(goal(), SLIPPAGE_BPS, { value });
+    return { ...f, value };
+  }
+
+  it("agent executes; output (0.5x) credited to USER, never to agent", async () => {
+    const { vault, usdc, agent, user, value } = await setup();
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig))
+      .to.emit(vault, "TradeExecuted")
+      .withArgs(user.address, await usdc.getAddress(), value / 2n, p.receiptHash);
+    expect(await usdc.balanceOf(user.address)).to.equal(value / 2n);
+    expect(await usdc.balanceOf(agent.address)).to.equal(0n);
+    expect((await vault.intents(user.address)).active).to.equal(false);
+    expect(await vault.intentNonce(user.address)).to.equal(1n);
+  });
+
+  it("agent cannot redirect output: recipient is hardwired to the vault", async () => {
+    const { vault, usdc, agent, user, attacker, value } = await setup();
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await vault.connect(agent).executeTrade(p, sig);
+    expect(await usdc.balanceOf(attacker.address)).to.equal(0n);
+    expect(await usdc.balanceOf(user.address)).to.equal(value / 2n);
+  });
+
+  it("non-agent cannot call executeTrade", async () => {
+    const { vault, usdc, agent, user, attacker } = await setup();
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(attacker).executeTrade(p, sig)).to.be.revertedWith("not agent");
+  });
+});
