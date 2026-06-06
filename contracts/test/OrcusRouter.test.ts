@@ -45,6 +45,19 @@ describe("OrcusRouter", () => {
     )).to.be.revertedWith("slippage");
   });
 
+  it("reverts when tokenOut is not the settlement token", async () => {
+    const { router, wnative, caller, recipient } = await deploy();
+    const amountIn = ethers.parseEther("1");
+    const bad = {
+      tokenIn: await wnative.getAddress(),
+      tokenOut: "0x000000000000000000000000000000000000bEEF",
+      fee: 3000, recipient: recipient.address,
+      deadline: Math.floor(Date.now() / 1000) + 300,
+      amountIn, amountOutMinimum: 0n, sqrtPriceLimitX96: 0n,
+    };
+    await expect(router.connect(caller).exactInputSingle(bad)).to.be.revertedWith("unsupported tokenOut");
+  });
+
   it("withdraw is owner-only", async () => {
     const { router, usdc, attacker, owner } = await deploy();
     await expect(router.connect(attacker).withdraw(await usdc.getAddress(), 1n))

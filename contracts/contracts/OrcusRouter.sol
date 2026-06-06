@@ -30,6 +30,7 @@ contract OrcusRouter is ISwapRouter {
         external payable override returns (uint256 amountOut)
     {
         require(p.amountIn > 0, "zero amountIn");
+        require(p.tokenOut == usdc, "unsupported tokenOut");
         IERC20(p.tokenIn).safeTransferFrom(msg.sender, address(this), p.amountIn);
         amountOut = oracle.getExpectedOut(p.tokenIn, p.tokenOut, p.amountIn);
         require(amountOut >= p.amountOutMinimum, "slippage");
