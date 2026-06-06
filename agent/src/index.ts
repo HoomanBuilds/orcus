@@ -5,7 +5,6 @@ import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
 import { getMarketSnapshot } from "./market.js";
-import { TESTNET_TOKENS } from "./dex/jaine.js";
 import { signExecParams } from "./sign/execParams.js";
 import { getOgPriceScaled } from "./price/binance.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
@@ -28,6 +27,14 @@ async function main() {
 
   log("boot", `vault=${env.vault}`);
   log("boot", `agent=${wallet.address}`);
+
+  const routerAddr = await vault["swapRouter"]() as string;
+  const settlementToken = await new Contract(
+    routerAddr,
+    ["function usdc() view returns (address)"],
+    provider,
+  )["usdc"]() as string;
+  log("boot", `settlement token (oUSDC) = ${settlementToken}`);
 
   // Watchdog
   setInterval(async () => {
@@ -90,8 +97,10 @@ async function main() {
       log("price", `pushing 0G/USD=${priceScaled.toString()} to oracle ${oracleAddr}`);
       await (await oracle["setPrice"](priceScaled) as { wait(): Promise<unknown> }).wait();
 
-      const wantedSymbol = (plain.tokenOut ?? "USDC") as keyof typeof TESTNET_TOKENS;
-      const tokenOut = TESTNET_TOKENS[wantedSymbol] ?? TESTNET_TOKENS.USDC;
+      // The mock router settles only in the deployed oUSDC; the user's tokenOut
+      // preference is cosmetic on the mock (real multi-token only on real DEX chains).
+      const requested = plain.tokenOut ?? "USDC";
+      const tokenOut = settlementToken;
 
       const deadline = Math.floor(Date.now() / 1000) + 300;
       const nonce = await vault["intentNonce"](user) as bigint;
@@ -106,7 +115,7 @@ async function main() {
       };
       const signature = await signExecParams(wallet, env.chainId, env.vault, params);
 
-      log("swap", `executeTrade tokenOut=${wantedSymbol} nonce=${nonce}`);
+      log("swap", `executeTrade requested=${requested} settle=oUSDC(${tokenOut}) nonce=${nonce}`);
       const tx = await vault["executeTrade"](params, signature);
       const r = await (tx as { wait(): Promise<{ hash: string }> }).wait();
       log("swap", `executed tx=${r?.hash}`);
