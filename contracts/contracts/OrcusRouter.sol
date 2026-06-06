@@ -1,89 +1,49 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-interface IERC20 {
-    function transfer(address to, uint256 amount) external returns (bool);
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ISwapRouter} from "./interfaces/ISwapRouter.sol";
 
-    function balanceOf(address account) external view returns (uint256);
-}
+/// @notice Mock DEX router for 0G Galileo that behaves like Uniswap V3
+///         SwapRouter: pulls tokenIn via transferFrom and pays tokenOut at a
+///         fixed rate. No permissionless fallback (audit C-03).
+contract OrcusRouter is ISwapRouter {
+    using SafeERC20 for IERC20;
 
-/**
- * @title OrcusRouter
- * @notice Swap router for the Orcus dark pool — accepts native OG and
- *         transfers oUSDC to the recipient at a fixed exchange rate.
- * @dev Designed to be called by StrategyVault.executeTradeWithProof via
- *      a low-level call with exactInputSingle-encoded calldata.
- */
-contract OrcusRouter {
-    /** @notice Exchange rate numerator (1 OG = RATE_NUM/RATE_DEN oUSDC) */
-    uint256 public constant RATE_NUM = 50;
-
-    /** @notice Exchange rate denominator */
+    uint256 public constant RATE_NUM = 50;   // 1 tokenIn = 0.5 tokenOut
     uint256 public constant RATE_DEN = 100;
 
-    /** @notice Address of the oUSDC token contract */
     address public immutable usdc;
-
-    /** @notice Owner who can withdraw accumulated OG */
     address public owner;
 
-    /**
-     * @param _usdc Address of the OrcusUSDC (oUSDC) token
-     */
-    constructor(address _usdc) {
+    constructor(address _usdc, address _owner) {
+        require(_usdc != address(0) && _owner != address(0), "zero addr");
         usdc = _usdc;
-        owner = msg.sender;
+        owner = _owner;
     }
 
-    receive() external payable {}
-
-    /**
-     * @notice Handles exactInputSingle calls forwarded from the vault.
-     * @dev Decodes the recipient from the ABI-encoded calldata, calculates
-     *      the output amount at the fixed rate, transfers oUSDC to the
-     *      recipient, and returns amountOut as a 32-byte word.
-     *
-     *      exactInputSingle calldata layout (after 4-byte selector):
-     *        0x00: tokenIn (address)
-     *        0x20: tokenOut (address)
-     *        0x40: fee (uint24)
-     *        0x60: recipient (address)
-     *        0x80: deadline (uint256)
-     *        0xA0: amountIn (uint256)
-     *        0xC0: amountOutMinimum (uint256)
-     *        0xE0: sqrtPriceLimitX96 (uint160)
-     */
-    fallback() external payable {
-        require(msg.data.length >= 4 + 0x100, "calldata too short");
-
-        address recipient;
-        assembly {
-            recipient := calldataload(100)
-        }
-
-        uint256 amountOut = (msg.value * RATE_NUM) / RATE_DEN;
-        require(
-            IERC20(usdc).transfer(recipient, amountOut),
-            "USDC transfer failed"
-        );
-
-        assembly {
-            mstore(0, amountOut)
-            return(0, 32)
-        }
+    function exactInputSingle(ExactInputSingleParams calldata p)
+        external
+        payable
+        override
+        returns (uint256 amountOut)
+    {
+        require(p.amountIn > 0, "zero amountIn");
+        IERC20(p.tokenIn).safeTransferFrom(msg.sender, address(this), p.amountIn);
+        amountOut = (p.amountIn * RATE_NUM) / RATE_DEN;
+        require(amountOut >= p.amountOutMinimum, "slippage");
+        IERC20(usdc).safeTransfer(p.recipient, amountOut);
     }
 
-    /**
-     * @notice Allows the owner to withdraw accumulated OG or ERC20 tokens.
-     * @param token Address of the token to withdraw (address(0) for native OG)
-     * @param amount Amount to withdraw
-     */
+    /// @notice Owner ops withdrawal (mock). On a real router this would not exist.
     function withdraw(address token, uint256 amount) external {
         require(msg.sender == owner, "not owner");
         if (token == address(0)) {
-            payable(owner).transfer(amount);
+            (bool ok, ) = payable(owner).call{value: amount}("");
+            require(ok, "native send failed");
         } else {
-            IERC20(token).transfer(owner, amount);
+            IERC20(token).safeTransfer(owner, amount);
         }
     }
 }
