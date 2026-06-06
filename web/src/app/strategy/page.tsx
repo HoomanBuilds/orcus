@@ -56,17 +56,13 @@ export default function StrategyPage() {
   const [txHash, setTxHash]     = useState<string | null>(null);
   const [errMsg, setErrMsg]     = useState<string | null>(null);
 
-  const { data: balance } = useReadContract({
-    abi: vaultAbi, address: VAULT, functionName: "balances",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!VAULT, refetchInterval: 10_000 },
-  });
-
-  const { data: intent } = useReadContract({
+  const { data: intentData } = useReadContract({
     abi: vaultAbi, address: VAULT, functionName: "intents",
     args: address ? [address] : undefined,
     query: { enabled: !!address && !!VAULT, refetchInterval: 10_000 },
   });
+  const balance = (intentData?.[2] ?? 0n) as bigint;
+  const intent = intentData;
 
   const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: txHash as `0x${string}` | undefined });
 
@@ -93,8 +89,8 @@ export default function StrategyPage() {
       setPhase("submitting");
       const hash = await writeContractAsync({
         abi: vaultAbi, address: VAULT,
-        functionName: "depositAndSetIntent",
-        args: [ciphertext, BigInt(slippage), BigInt(500)],
+        functionName: "depositNative",
+        args: [ciphertext, Number(slippage)],
         value: parseEther(amount),
       });
       setTxHash(hash);
@@ -205,7 +201,7 @@ export default function StrategyPage() {
                     </div>
                     {[
                       { label: "Intent", value: hasActive ? "Active" : "None", green: hasActive },
-                      { label: "Slippage", value: hasActive && intent ? `${intent[1].toString()} bps` : "—" },
+                      { label: "Slippage", value: hasActive && intent ? `${intent[3].toString()} bps` : "—" },
                     ].map((f) => (
                       <div key={f.label} className="px-5 py-3 flex items-center justify-between border-b border-black/[0.04]">
                         <span className="text-sm text-black/40">{f.label}</span>
