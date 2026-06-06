@@ -5,7 +5,7 @@ import { resolveChain } from "./chains.js";
 import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
-import { getMarketSnapshot } from "./market.js";
+import { buildMarketSnapshot } from "./indicators.js";
 import { signExecParams } from "./sign/execParams.js";
 import { getOgPriceScaled } from "./price/binance.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
@@ -60,10 +60,10 @@ async function main() {
       );
       log("decrypt", `goal="${plain.goal}" tokenOut=${plain.tokenOut ?? "USDT"}`);
 
-      log("market", "fetching snapshot...");
-      const market = await getMarketSnapshot();
-      const mkt = JSON.parse(market) as { price?: number; trend?: string };
-      log("market", `price=${mkt.price} trend=${mkt.trend}`);
+      log("market", "building structured snapshot...");
+      const market = await buildMarketSnapshot();
+      const mkt = JSON.parse(market) as { price?: number; trend?: string; indicators?: { rsi14?: number | null } };
+      log("market", `price=${mkt.price} trend=${mkt.trend} rsi14=${mkt.indicators?.rsi14 ?? "n/a"}`);
 
       log("tee", "calling sealed inference...");
       const decision = await sealedDecide(null, TEE_PROVIDER, JSON.stringify(plain), market);
