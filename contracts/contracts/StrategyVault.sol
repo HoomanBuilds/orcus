@@ -157,7 +157,10 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
         Intent memory it = intents[p.user];
         require(it.active && it.amountIn > 0, "no intent");
 
+        // IPriceOracle MUST return output denominated in tokenOut decimals; a
+        // real Pyth/Chainlink adapter must normalize feed decimals (audit H-05).
         uint256 expectedOut = oracle.getExpectedOut(it.tokenIn, p.tokenOut, it.amountIn);
+        require(expectedOut > 0, "oracle zero");
         uint256 floorOut = (expectedOut * (MAX_BPS - it.maxSlippageBps)) / MAX_BPS;
         uint256 minOut = floorOut > p.agentMinOut ? floorOut : p.agentMinOut;
 
@@ -188,6 +191,7 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
 
     function requestCancel() external {
         require(intents[msg.sender].active, "no intent");
+        require(cancelRequestedAt[msg.sender] == 0, "already requested");
         cancelRequestedAt[msg.sender] = block.timestamp;
         emit CancelRequested(msg.sender, block.timestamp);
     }
