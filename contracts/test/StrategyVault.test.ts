@@ -164,3 +164,52 @@ describe("StrategyVault: execution (C-01, happy path)", () => {
     await expect(vault.connect(attacker).executeTrade(p, sig)).to.be.revertedWith("not agent");
   });
 });
+
+describe("StrategyVault: slippage floor (C-02, H-04, H-07)", () => {
+  async function setup(slippageBps: number) {
+    const f = await deployFixture();
+    const value = ethers.parseEther("2");
+    await f.vault.connect(f.user).depositNative(goal(), slippageBps, { value });
+    return { ...f, value };
+  }
+
+  it("oracle-grounded floor passes an honest 0.5x trade at 1% slippage", async () => {
+    const { vault, usdc, agent, user, value } = await setup(SLIPPAGE_BPS);
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig)).to.emit(vault, "TradeExecuted");
+    expect(await usdc.balanceOf(user.address)).to.equal(value / 2n);
+  });
+
+  it("reverts when realised output is below the oracle floor", async () => {
+    const { vault, usdc, agent, user, value } = await setup(0);
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: value, // demand 1:1 — impossible at 0.5x
+      deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("slippage");
+  });
+
+  it("deadline in the past reverts (H-07)", async () => {
+    const { vault, usdc, agent, user } = await setup(SLIPPAGE_BPS);
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline: 1, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("expired");
+  });
+
+  it("maxSlippageBps > 10000 is rejected at deposit (H-04)", async () => {
+    const { vault, user } = await deployFixture();
+    await expect(vault.connect(user).depositNative(goal(), 10001, { value: ethers.parseEther("1") }))
+      .to.be.revertedWith("slippage too high");
+  });
+});
