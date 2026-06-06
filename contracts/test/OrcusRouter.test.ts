@@ -8,12 +8,15 @@ describe("OrcusRouter", () => {
     const usdc = await USDC.deploy(owner.address);
     const W = await ethers.getContractFactory("WrappedNative");
     const wnative = await W.deploy();
+    const Oracle = await ethers.getContractFactory("OrcusOracle");
+    const oracle = await Oracle.deploy(owner.address, owner.address, 0);
+    await oracle.connect(owner).setPrice(ethers.parseEther("0.5")); // 0.5 oUSDC per wnative
     const Router = await ethers.getContractFactory("OrcusRouter");
-    const router = await Router.deploy(await usdc.getAddress(), owner.address);
+    const router = await Router.deploy(await usdc.getAddress(), await oracle.getAddress(), owner.address);
     await usdc.connect(owner).mint(await router.getAddress(), ethers.parseEther("1000000"));
     await wnative.connect(caller).deposit({ value: ethers.parseEther("10") });
     await wnative.connect(caller).approve(await router.getAddress(), ethers.MaxUint256);
-    return { router, usdc, wnative, owner, caller, recipient, attacker };
+    return { router, usdc, wnative, oracle, owner, caller, recipient, attacker };
   }
 
   function params(wnative: string, usdc: string, recipient: string, amountIn: bigint, minOut: bigint) {
@@ -24,7 +27,7 @@ describe("OrcusRouter", () => {
     };
   }
 
-  it("pulls tokenIn via transferFrom and pays tokenOut at fixed rate (0.5)", async () => {
+  it("pulls tokenIn via transferFrom and pays tokenOut at the oracle price (0.5)", async () => {
     const { router, usdc, wnative, caller, recipient } = await deploy();
     const amountIn = ethers.parseEther("2");
     await router.connect(caller).exactInputSingle(
@@ -42,7 +45,7 @@ describe("OrcusRouter", () => {
     )).to.be.revertedWith("slippage");
   });
 
-  it("withdraw is owner-only and cannot touch active inventory beyond surplus", async () => {
+  it("withdraw is owner-only", async () => {
     const { router, usdc, attacker, owner } = await deploy();
     await expect(router.connect(attacker).withdraw(await usdc.getAddress(), 1n))
       .to.be.revertedWith("not owner");

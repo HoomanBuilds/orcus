@@ -15,12 +15,13 @@ async function deployFixture() {
   const WN = await ethers.getContractFactory("WrappedNative");
   const wnative = await WN.deploy();
 
-  const Router = await ethers.getContractFactory("OrcusRouter");
-  const router = await Router.deploy(await usdc.getAddress(), owner.address);
-  await usdc.connect(owner).mint(await router.getAddress(), ethers.parseEther("1000000"));
-
   const Oracle = await ethers.getContractFactory("OrcusOracle");
-  const oracle = await Oracle.deploy();
+  const oracle = await Oracle.deploy(owner.address, owner.address, 0);
+  await oracle.connect(owner).setPrice(ethers.parseEther("0.5")); // 0.5 oUSDC per wnative
+
+  const Router = await ethers.getContractFactory("OrcusRouter");
+  const router = await Router.deploy(await usdc.getAddress(), await oracle.getAddress(), owner.address);
+  await usdc.connect(owner).mint(await router.getAddress(), ethers.parseEther("1000000"));
 
   // agent is also the attestor in v1
   const Vault = await ethers.getContractFactory("StrategyVault");
