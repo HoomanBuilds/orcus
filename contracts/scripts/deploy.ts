@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 
 // Deploys the full Orcus v2 stack to the configured network (Galileo).
-// AGENT_ADDRESS is the executor EOA (also the attestor in v1).
+// AGENT_ADDRESS is the executor EOA (also the attestor and the oracle price updater in v1).
 async function main() {
   const agent = process.env.AGENT_ADDRESS;
   if (!agent) throw new Error("AGENT_ADDRESS env required");
@@ -16,18 +16,24 @@ async function main() {
   await wnative.waitForDeployment();
   console.log("WrappedNative:", await wnative.getAddress());
 
+  // updater = agent (pushes the live Binance price); maxAge = 0 (no staleness revert on the demo)
+  const oracle = await (await ethers.getContractFactory("OrcusOracle")).deploy(deployer.address, agent, 0);
+  await oracle.waitForDeployment();
+  console.log("OrcusOracle:  ", await oracle.getAddress());
+
+  // seed an initial price (~0G/USD); the agent overwrites this live before each trade
+  const seed = await oracle.setPrice(ethers.parseEther("0.30"));
+  await seed.wait();
+  console.log("Seeded oracle price 0.30");
+
   const router = await (await ethers.getContractFactory("OrcusRouter"))
-    .deploy(await usdc.getAddress(), deployer.address);
+    .deploy(await usdc.getAddress(), await oracle.getAddress(), deployer.address);
   await router.waitForDeployment();
   console.log("OrcusRouter:  ", await router.getAddress());
 
   const mint = await usdc.mint(await router.getAddress(), ethers.parseEther("1000000"));
   await mint.wait();
   console.log("Minted 1,000,000 oUSDC to router");
-
-  const oracle = await (await ethers.getContractFactory("OrcusOracle")).deploy();
-  await oracle.waitForDeployment();
-  console.log("OrcusOracle:  ", await oracle.getAddress());
 
   const vault = await (await ethers.getContractFactory("StrategyVault")).deploy(
     agent, agent,
