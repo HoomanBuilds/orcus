@@ -303,3 +303,62 @@ describe("StrategyVault: escape hatch & admin (M-06, H-03, H-06)", () => {
       .to.be.revertedWithCustomError(vault, "EnforcedPause");
   });
 });
+
+describe("StrategyVault: additional coverage", () => {
+  it("withdraw returns an ERC20 tokenIn (depositToken path)", async () => {
+    const { vault, owner, user } = await deployFixture();
+    // a generic ERC20 acting as tokenIn (a second WrappedNative used as a plain token)
+    const Tok = await ethers.getContractFactory("WrappedNative");
+    const tok = await Tok.deploy();
+    await tok.connect(user).deposit({ value: ethers.parseEther("3") });
+    await tok.connect(user).approve(await vault.getAddress(), ethers.MaxUint256);
+    await vault.connect(user).depositToken(await tok.getAddress(), ethers.parseEther("3"), goal(), SLIPPAGE_BPS);
+    const before = await tok.balanceOf(user.address);
+    await vault.connect(user).withdraw();
+    expect(await tok.balanceOf(user.address)).to.equal(before + ethers.parseEther("3"));
+    expect((await vault.intents(user.address)).active).to.equal(false);
+  });
+
+  it("executeTrade reverts 'no intent' when the user has none", async () => {
+    const { vault, usdc, agent, user } = await deployFixture();
+    const deadline = (await time.latest()) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("no intent");
+  });
+
+  it("double withdraw: second call reverts 'nothing'", async () => {
+    const { vault, user } = await deployFixture();
+    await vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value: ethers.parseEther("1") });
+    await vault.connect(user).withdraw();
+    await expect(vault.connect(user).withdraw()).to.be.revertedWith("nothing");
+  });
+
+  it("executes an ERC20-in swap and credits oUSDC to the user", async () => {
+    const { vault, usdc, agent, user } = await deployFixture();
+    const Tok = await ethers.getContractFactory("WrappedNative");
+    const tok = await Tok.deploy();
+    const amt = ethers.parseEther("4");
+    await tok.connect(user).deposit({ value: amt });
+    await tok.connect(user).approve(await vault.getAddress(), ethers.MaxUint256);
+    await vault.connect(user).depositToken(await tok.getAddress(), amt, goal(), SLIPPAGE_BPS);
+    const deadline = (await time.latest()) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig)).to.emit(vault, "TradeExecuted");
+    expect(await usdc.balanceOf(user.address)).to.equal(amt / 2n);
+  });
+
+  it("requestCancel cannot be called twice", async () => {
+    const { vault, user } = await deployFixture();
+    await vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value: ethers.parseEther("1") });
+    await vault.connect(user).requestCancel();
+    await expect(vault.connect(user).requestCancel()).to.be.revertedWith("already requested");
+  });
+});
