@@ -213,3 +213,47 @@ describe("StrategyVault: slippage floor (C-02, H-04, H-07)", () => {
       .to.be.revertedWith("slippage too high");
   });
 });
+
+describe("StrategyVault: attestation & replay (H-01)", () => {
+  async function setup() {
+    const f = await deployFixture();
+    await f.vault.connect(f.user).depositNative(goal(), SLIPPAGE_BPS, { value: ethers.parseEther("2") });
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const p = {
+      user: f.user.address, tokenOut: await f.usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
+    };
+    return { ...f, p };
+  }
+
+  it("rejects a signature from a non-attestor key", async () => {
+    const { vault, agent, attacker, p } = await setup();
+    const badSig = await signExec(vault, attacker, p); // attacker != attestor(agent)
+    await expect(vault.connect(agent).executeTrade(p, badSig)).to.be.revertedWith("bad attestation");
+  });
+
+  it("rejects a wrong-chainId domain signature", async () => {
+    const { vault, agent, p } = await setup();
+    const domain = {
+      name: "Orcus", version: "1", chainId: 999999,
+      verifyingContract: await vault.getAddress(),
+    };
+    const types = {
+      ExecParams: [
+        { name: "user", type: "address" }, { name: "tokenOut", type: "address" },
+        { name: "fee", type: "uint24" }, { name: "agentMinOut", type: "uint256" },
+        { name: "deadline", type: "uint256" }, { name: "receiptHash", type: "bytes32" },
+        { name: "nonce", type: "uint256" },
+      ],
+    };
+    const wrongChainSig = await agent.signTypedData(domain, types, p);
+    await expect(vault.connect(agent).executeTrade(p, wrongChainSig)).to.be.revertedWith("bad attestation");
+  });
+
+  it("nonce replay reverts (each execution bumps the nonce)", async () => {
+    const { vault, agent, p } = await setup();
+    const sig = await signExec(vault, agent, p);
+    await vault.connect(agent).executeTrade(p, sig); // nonce 0 consumed
+    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("bad nonce");
+  });
+});
