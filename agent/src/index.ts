@@ -6,6 +6,7 @@ import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
 import { buildMarketSnapshot } from "./indicators.js";
+import { buildDecisionReceipt } from "./receipt.js";
 import { signExecParams } from "./sign/execParams.js";
 import { getOgPriceScaled } from "./price/binance.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
@@ -74,12 +75,36 @@ async function main() {
         return;
       }
 
-      log("storage", "writing receipt to 0G Storage...");
+      // Push the live price first so the receipt records exactly what was used.
+      let priceScaled: bigint | null = null;
+      let oracleAddr: string | null = null;
+      if (chain.priceMode === "agent-push") {
+        oracleAddr = await vault["oracle"]() as string;
+        const oracle = new Contract(oracleAddr, ["function setPrice(uint256)"], wallet);
+        priceScaled = await getOgPriceScaled();
+        log("price", `pushing 0G/USD=${priceScaled.toString()} to oracle ${oracleAddr}`);
+        await (await oracle["setPrice"](priceScaled) as { wait(): Promise<unknown> }).wait();
+      }
+
+      log("storage", "writing decision receipt to 0G Storage...");
+      const receipt = buildDecisionReceipt({
+        chainKey: chain.key,
+        chainId: chain.chainId,
+        user,
+        ts: Date.now(),
+        marketJson: market,
+        oracleMode: chain.priceMode,
+        oracleAddress: oracleAddr,
+        priceScaled: priceScaled === null ? null : priceScaled.toString(),
+        teeProvider: TEE_PROVIDER,
+        action: decision.action,
+        reason: decision.reason,
+      });
       const receiptHashRaw = await writeReceipt(
         indexer as never,
         null,
         wallet,
-        { user, decision, ts: Date.now() },
+        receipt,
         chain.rpc,
       );
       const raw = receiptHashRaw.startsWith("0x") ? receiptHashRaw : `0x${receiptHashRaw}`;
@@ -87,14 +112,6 @@ async function main() {
       if (rawBytes.length > 32) throw new Error(`rootHash too long: ${rawBytes.length} bytes`);
       const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
       log("storage", `receipt=${receiptHash}`);
-
-      if (chain.priceMode === "agent-push") {
-        const oracleAddr = await vault["oracle"]() as string;
-        const oracle = new Contract(oracleAddr, ["function setPrice(uint256)"], wallet);
-        const priceScaled = await getOgPriceScaled();
-        log("price", `pushing 0G/USD=${priceScaled.toString()} to oracle ${oracleAddr}`);
-        await (await oracle["setPrice"](priceScaled) as { wait(): Promise<unknown> }).wait();
-      }
 
       // The mock router settles only in the deployed oUSDC; the user's tokenOut
       // preference is cosmetic on the mock (real multi-token only on real DEX chains).
