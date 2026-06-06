@@ -1,115 +1,243 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-contract StrategyVault {
-    // Jaine/Zer0 exactInputSingle selector — only this calldata shape is permitted
-    bytes4 private constant EXACT_INPUT_SINGLE = 0x414bf389;
+import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {ISwapRouter} from "./interfaces/ISwapRouter.sol";
+import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
+import {IWrappedNative} from "./interfaces/IWrappedNative.sol";
+
+/// @notice MEV-resistant dark-pool vault. Users deposit funds + an encrypted
+///         intent; an off-chain agent decides via sealed TEE inference and
+///         calls executeTrade with validated params + an EIP-712 attestation.
+///         The vault constructs the swap calldata itself (the agent never
+///         names a recipient, amount, or selector) and enforces an
+///         oracle-grounded output floor.
+contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
+    using SafeERC20 for IERC20;
 
     struct Intent {
         bytes   encryptedGoal;
-        uint256 maxSlippage;
-        uint256 stopLoss;
-        uint256 depositAmount;
+        address tokenIn;
+        uint256 amountIn;
+        uint16  maxSlippageBps;
         bool    active;
     }
 
-    mapping(address => Intent)  public intents;
-    mapping(address => uint256) public balances;
-
-    address public teeAgentAddress;
-    address public immutable jaineRouter;
-    address public immutable owner;
-    bool    public paused;
-
-    event IntentSet(address indexed user, uint256 amount, bytes32 intentHash);
-    event TradeExecuted(address indexed user, bytes32 receiptHash, bytes teeAttestation);
-    event Withdrawn(address indexed user, uint256 amount);
-    event AgentUpdated(address indexed oldAgent, address indexed newAgent);
-
-    modifier onlyOwner()  { require(msg.sender == owner,  "not owner"); _; }
-    modifier notPaused()  { require(!paused,               "paused");    _; }
-
-    constructor(address _teeAgentAddress, address _jaineRouter) {
-        require(_teeAgentAddress != address(0), "zero agent");
-        require(_jaineRouter     != address(0), "zero router");
-        owner            = msg.sender;
-        teeAgentAddress  = _teeAgentAddress;
-        jaineRouter      = _jaineRouter;
+    struct ExecParams {
+        address user;
+        address tokenOut;
+        uint24  fee;
+        uint256 agentMinOut;
+        uint256 deadline;
+        bytes32 receiptHash;
+        uint256 nonce;
     }
 
-    function pause()   external onlyOwner { paused = true; }
-    function unpause() external onlyOwner { paused = false; }
+    bytes32 private constant EXEC_TYPEHASH = keccak256(
+        "ExecParams(address user,address tokenOut,uint24 fee,uint256 agentMinOut,uint256 deadline,bytes32 receiptHash,uint256 nonce)"
+    );
+
+    uint256 public constant CANCEL_COOLDOWN = 1 hours;
+    uint16  public constant MAX_BPS = 10000;
+
+    mapping(address => Intent)  public intents;
+    mapping(address => uint256) public intentNonce;
+    mapping(address => uint256) public cancelRequestedAt;
+
+    address public agent;
+    address public attestor;
+    ISwapRouter   public swapRouter;
+    IPriceOracle  public oracle;
+    IWrappedNative public immutable wrappedNative;
+
+    event IntentSet(address indexed user, uint256 amountIn, bytes32 intentHash);
+    event TradeExecuted(address indexed user, address tokenOut, uint256 amountOut, bytes32 receiptHash);
+    event Withdrawn(address indexed user, address tokenIn, uint256 amount);
+    event CancelRequested(address indexed user, uint256 at);
+    event AgentUpdated(address indexed oldAgent, address indexed newAgent);
+    event AttestorUpdated(address indexed oldAttestor, address indexed newAttestor);
+    event SwapRouterUpdated(address indexed oldRouter, address indexed newRouter);
+    event OracleUpdated(address indexed oldOracle, address indexed newOracle);
+
+    constructor(
+        address _agent,
+        address _attestor,
+        address _swapRouter,
+        address _oracle,
+        address _wrappedNative,
+        address _owner
+    ) Ownable(_owner) EIP712("Orcus", "1") {
+        require(_agent != address(0), "zero agent");
+        require(_attestor != address(0), "zero attestor");
+        require(_swapRouter.code.length > 0, "router not contract");
+        require(_oracle.code.length > 0, "oracle not contract");
+        require(_wrappedNative.code.length > 0, "wnative not contract");
+        agent = _agent;
+        attestor = _attestor;
+        swapRouter = ISwapRouter(_swapRouter);
+        oracle = IPriceOracle(_oracle);
+        wrappedNative = IWrappedNative(_wrappedNative);
+        emit AgentUpdated(address(0), _agent);
+        emit AttestorUpdated(address(0), _attestor);
+        emit SwapRouterUpdated(address(0), _swapRouter);
+        emit OracleUpdated(address(0), _oracle);
+    }
+
+    // deposits
+
+    function depositNative(bytes calldata encryptedGoal, uint16 maxSlippageBps)
+        external payable nonReentrant whenNotPaused
+    {
+        require(msg.value > 0, "no value");
+        _openIntent(encryptedGoal, maxSlippageBps);
+        wrappedNative.deposit{value: msg.value}();
+        intents[msg.sender] = Intent({
+            encryptedGoal: encryptedGoal,
+            tokenIn: address(wrappedNative),
+            amountIn: msg.value,
+            maxSlippageBps: maxSlippageBps,
+            active: true
+        });
+        emit IntentSet(msg.sender, msg.value, _intentHash(encryptedGoal, maxSlippageBps));
+    }
+
+    function depositToken(address token, uint256 amount, bytes calldata encryptedGoal, uint16 maxSlippageBps)
+        external nonReentrant whenNotPaused
+    {
+        require(token != address(0), "zero token");
+        require(amount > 0, "no amount");
+        _openIntent(encryptedGoal, maxSlippageBps);
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        intents[msg.sender] = Intent({
+            encryptedGoal: encryptedGoal,
+            tokenIn: token,
+            amountIn: amount,
+            maxSlippageBps: maxSlippageBps,
+            active: true
+        });
+        emit IntentSet(msg.sender, amount, _intentHash(encryptedGoal, maxSlippageBps));
+    }
+
+    function _openIntent(bytes calldata encryptedGoal, uint16 maxSlippageBps) private view {
+        require(encryptedGoal.length > 0, "empty intent");
+        require(maxSlippageBps <= MAX_BPS, "slippage too high");
+        require(!intents[msg.sender].active, "active intent");
+    }
+
+    function _intentHash(bytes calldata encryptedGoal, uint16 maxSlippageBps)
+        private pure returns (bytes32)
+    {
+        return keccak256(abi.encode(encryptedGoal, maxSlippageBps));
+    }
+
+    // execution
+
+    function executeTrade(ExecParams calldata p, bytes calldata signature)
+        external nonReentrant whenNotPaused
+    {
+        require(msg.sender == agent, "not agent");
+        require(p.deadline >= block.timestamp, "expired");
+
+        uint256 cancelAt = cancelRequestedAt[p.user];
+        require(cancelAt == 0 || block.timestamp < cancelAt + CANCEL_COOLDOWN, "cancelling");
+
+        require(p.nonce == intentNonce[p.user], "bad nonce");
+
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+            EXEC_TYPEHASH, p.user, p.tokenOut, p.fee, p.agentMinOut, p.deadline, p.receiptHash, p.nonce
+        )));
+        require(ECDSA.recover(digest, signature) == attestor, "bad attestation");
+
+        Intent memory it = intents[p.user];
+        require(it.active && it.amountIn > 0, "no intent");
+
+        uint256 expectedOut = oracle.getExpectedOut(it.tokenIn, p.tokenOut, it.amountIn);
+        uint256 floorOut = (expectedOut * (MAX_BPS - it.maxSlippageBps)) / MAX_BPS;
+        uint256 minOut = floorOut > p.agentMinOut ? floorOut : p.agentMinOut;
+
+        // effects before interactions
+        intentNonce[p.user] = p.nonce + 1;
+        delete intents[p.user];
+        delete cancelRequestedAt[p.user];
+
+        IERC20(it.tokenIn).forceApprove(address(swapRouter), it.amountIn);
+        uint256 amountOut = swapRouter.exactInputSingle(ISwapRouter.ExactInputSingleParams({
+            tokenIn: it.tokenIn,
+            tokenOut: p.tokenOut,
+            fee: p.fee,
+            recipient: address(this),
+            deadline: p.deadline,
+            amountIn: it.amountIn,
+            amountOutMinimum: minOut,
+            sqrtPriceLimitX96: 0
+        }));
+        IERC20(it.tokenIn).forceApprove(address(swapRouter), 0);
+
+        require(amountOut > 0 && amountOut >= minOut, "slippage");
+        IERC20(p.tokenOut).safeTransfer(p.user, amountOut);
+        emit TradeExecuted(p.user, p.tokenOut, amountOut, p.receiptHash);
+    }
+
+    // user escape hatch + withdraw
+
+    function requestCancel() external {
+        require(intents[msg.sender].active, "no intent");
+        cancelRequestedAt[msg.sender] = block.timestamp;
+        emit CancelRequested(msg.sender, block.timestamp);
+    }
+
+    function withdraw() external nonReentrant {
+        Intent memory it = intents[msg.sender];
+        require(it.active && it.amountIn > 0, "nothing");
+        delete intents[msg.sender];
+        delete cancelRequestedAt[msg.sender];
+        if (it.tokenIn == address(wrappedNative)) {
+            wrappedNative.withdraw(it.amountIn);
+            (bool ok, ) = payable(msg.sender).call{value: it.amountIn}("");
+            require(ok, "native send failed");
+        } else {
+            IERC20(it.tokenIn).safeTransfer(msg.sender, it.amountIn);
+        }
+        emit Withdrawn(msg.sender, it.tokenIn, it.amountIn);
+    }
+
+    // admin
 
     function setAgent(address _new) external onlyOwner {
         require(_new != address(0), "zero agent");
-        emit AgentUpdated(teeAgentAddress, _new);
-        teeAgentAddress = _new;
+        emit AgentUpdated(agent, _new);
+        agent = _new;
     }
 
-    function depositAndSetIntent(
-        bytes calldata _encryptedGoal,
-        uint256 _maxSlippage,
-        uint256 _stopLoss
-    ) external payable notPaused {
-        require(msg.value > 0,              "Must deposit funds");
-        require(_encryptedGoal.length > 0,  "empty intent");
-        require(!intents[msg.sender].active, "intent already active");
-        balances[msg.sender] += msg.value;
-        intents[msg.sender] = Intent({
-            encryptedGoal: _encryptedGoal,
-            maxSlippage:   _maxSlippage,
-            stopLoss:      _stopLoss,
-            depositAmount: balances[msg.sender],
-            active:        true
-        });
-        bytes32 intentHash = keccak256(abi.encode(_encryptedGoal, _maxSlippage, _stopLoss));
-        emit IntentSet(msg.sender, msg.value, intentHash);
+    function setAttestor(address _new) external onlyOwner {
+        require(_new != address(0), "zero attestor");
+        emit AttestorUpdated(attestor, _new);
+        attestor = _new;
     }
 
-    function executeTradeWithProof(
-        address user,
-        bytes calldata tradeData,
-        bytes calldata teeAttestation,
-        bytes32 storageReceiptHash,
-        uint256 minAmountOut
-    ) external notPaused {
-        require(msg.sender == teeAgentAddress, "Unauthorized");
-        require(intents[user].active,           "No active intent");
-        require(tradeData.length >= 4,          "tradeData too short");
-        require(bytes4(tradeData[:4]) == EXACT_INPUT_SINGLE, "invalid selector");
-
-        uint256 amount        = balances[user];
-        uint256 storedSlippage = intents[user].maxSlippage;
-        require(amount > 0, "No balance");
-
-        // Agent-supplied minAmountOut must be at least as strict as user's stored slippage
-        if (storedSlippage > 0) {
-            uint256 floor = (amount * (10000 - storedSlippage)) / 10000;
-            require(minAmountOut >= floor, "minAmountOut below slippage limit");
-        }
-
-        balances[user] = 0;
-        intents[user].active = false;
-
-        (bool ok, bytes memory result) = jaineRouter.call{value: amount}(tradeData);
-        require(ok, "swap failed");
-
-        // Enforce output — router returns amountOut as first 32 bytes
-        if (result.length >= 32) {
-            uint256 amountOut = abi.decode(result, (uint256));
-            require(amountOut >= minAmountOut, "slippage exceeded");
-        }
-
-        emit TradeExecuted(user, storageReceiptHash, teeAttestation);
+    function setSwapRouter(address _new) external onlyOwner {
+        require(_new.code.length > 0, "router not contract");
+        emit SwapRouterUpdated(address(swapRouter), _new);
+        swapRouter = ISwapRouter(_new);
     }
 
-    function withdraw() external {
-        uint256 amount = balances[msg.sender];
-        require(amount > 0, "Nothing to withdraw");
-        balances[msg.sender] = 0;
-        intents[msg.sender].active = false;
-        emit Withdrawn(msg.sender, amount);
-        (bool ok, ) = payable(msg.sender).call{value: amount}("");
-        require(ok, "transfer failed");
+    function setOracle(address _new) external onlyOwner {
+        require(_new.code.length > 0, "oracle not contract");
+        emit OracleUpdated(address(oracle), _new);
+        oracle = IPriceOracle(_new);
+    }
+
+    function pause()   external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
+
+    /// @dev only the wrapped-native contract returns native here (on withdraw unwrap)
+    receive() external payable {
+        require(msg.sender == address(wrappedNative), "direct native");
     }
 }
