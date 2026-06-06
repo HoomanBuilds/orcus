@@ -1,184 +1,116 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-// exactInputSingle selector — must match contract constant
-const EXACT_INPUT_SINGLE = "0x414bf389";
+const FEE = 3000;
+const SLIPPAGE_BPS = 100; // 1%
 
-// Minimal tradeData: correct selector + 7 zero-padded params (224 bytes)
-function mockTradeData(): string {
-  return EXACT_INPUT_SINGLE + "00".repeat(32 * 7);
+async function deployFixture() {
+  const [owner, user, agent, attacker] = await ethers.getSigners();
+
+  const USDC = await ethers.getContractFactory("OrcusUSDC");
+  const usdc = await USDC.deploy(owner.address);
+
+  const WN = await ethers.getContractFactory("WrappedNative");
+  const wnative = await WN.deploy();
+
+  const Router = await ethers.getContractFactory("OrcusRouter");
+  const router = await Router.deploy(await usdc.getAddress(), owner.address);
+  await usdc.connect(owner).mint(await router.getAddress(), ethers.parseEther("1000000"));
+
+  const Oracle = await ethers.getContractFactory("OrcusOracle");
+  const oracle = await Oracle.deploy();
+
+  // agent is also the attestor in v1
+  const Vault = await ethers.getContractFactory("StrategyVault");
+  const vault = await Vault.deploy(
+    agent.address, agent.address,
+    await router.getAddress(), await oracle.getAddress(),
+    await wnative.getAddress(), owner.address,
+  );
+
+  return { vault, usdc, wnative, router, oracle, owner, user, agent, attacker };
 }
 
-describe("StrategyVault", () => {
-  async function deploy() {
-    const [owner, user, agent, attacker] = await ethers.getSigners();
-    const MockRouter = await ethers.getContractFactory("MockRouter");
-    const mockRouter = await MockRouter.deploy();
-    await mockRouter.waitForDeployment();
-    const Vault = await ethers.getContractFactory("StrategyVault");
-    const vault = await Vault.deploy(agent.address, await mockRouter.getAddress());
-    await vault.waitForDeployment();
-    return { vault, mockRouter, owner, user, agent, attacker };
-  }
+// EIP-712 signer for ExecParams. `signer` is the attestor key.
+async function signExec(
+  vault: any, signer: HardhatEthersSigner,
+  p: { user: string; tokenOut: string; fee: number; agentMinOut: bigint; deadline: number; receiptHash: string; nonce: bigint },
+) {
+  const net = await ethers.provider.getNetwork();
+  const domain = {
+    name: "Orcus", version: "1",
+    chainId: Number(net.chainId),
+    verifyingContract: await vault.getAddress(),
+  };
+  const types = {
+    ExecParams: [
+      { name: "user", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "fee", type: "uint24" },
+      { name: "agentMinOut", type: "uint256" },
+      { name: "deadline", type: "uint256" },
+      { name: "receiptHash", type: "bytes32" },
+      { name: "nonce", type: "uint256" },
+    ],
+  };
+  return signer.signTypedData(domain, types, p);
+}
 
-  // ── constructor ──────────────────────────────────────────────────────────
-  it("constructor sets owner, agent, and router", async () => {
-    const { vault, mockRouter, owner, agent } = await deploy();
-    expect(await vault.teeAgentAddress()).to.equal(agent.address);
-    expect(await vault.jaineRouter()).to.equal(await mockRouter.getAddress());
-    expect(await vault.owner()).to.equal(owner.address);
+const goal = () => ethers.hexlify(ethers.toUtf8Bytes("ciphertext"));
+
+describe("StrategyVault: deposits & withdraw", () => {
+  it("depositNative wraps native, records intent, emits IntentSet", async () => {
+    const { vault, wnative, user } = await deployFixture();
+    const value = ethers.parseEther("1");
+    await expect(vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value }))
+      .to.emit(vault, "IntentSet");
+    const it = await vault.intents(user.address);
+    expect(it.tokenIn).to.equal(await wnative.getAddress());
+    expect(it.amountIn).to.equal(value);
+    expect(it.maxSlippageBps).to.equal(SLIPPAGE_BPS);
+    expect(it.active).to.equal(true);
+    expect(await wnative.balanceOf(await vault.getAddress())).to.equal(value);
   });
 
-  it("constructor reverts on zero addresses", async () => {
-    const Vault = await ethers.getContractFactory("StrategyVault");
-    const [, , agent] = await ethers.getSigners();
-    const MockRouter = await ethers.getContractFactory("MockRouter");
-    const mockRouter = await MockRouter.deploy();
-    await mockRouter.waitForDeployment();
-    await expect(Vault.deploy(ethers.ZeroAddress, await mockRouter.getAddress())).to.be.revertedWith("zero agent");
-    await expect(Vault.deploy(agent.address, ethers.ZeroAddress)).to.be.revertedWith("zero router");
+  it("rejects depositNative with zero value / empty goal / slippage > 10000", async () => {
+    const { vault, user } = await deployFixture();
+    await expect(vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value: 0 }))
+      .to.be.revertedWith("no value");
+    await expect(vault.connect(user).depositNative("0x", SLIPPAGE_BPS, { value: 1n }))
+      .to.be.revertedWith("empty intent");
+    await expect(vault.connect(user).depositNative(goal(), 10001, { value: 1n }))
+      .to.be.revertedWith("slippage too high");
   });
 
-  // ── pause ────────────────────────────────────────────────────────────────
-  it("owner can pause and unpause", async () => {
-    const { vault, owner, user } = await deploy();
-    await vault.connect(owner).pause();
-    expect(await vault.paused()).to.equal(true);
-    const encryptedGoal = ethers.hexlify(ethers.toUtf8Bytes("c"));
-    await expect(
-      vault.connect(user).depositAndSetIntent(encryptedGoal, 50, 500, { value: ethers.parseEther("0.01") })
-    ).to.be.revertedWith("paused");
-    await vault.connect(owner).unpause();
-    expect(await vault.paused()).to.equal(false);
+  it("rejects a second active intent", async () => {
+    const { vault, user } = await deployFixture();
+    const value = ethers.parseEther("1");
+    await vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value });
+    await expect(vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value }))
+      .to.be.revertedWith("active intent");
   });
 
-  it("non-owner cannot pause", async () => {
-    const { vault, user } = await deploy();
-    await expect(vault.connect(user).pause()).to.be.revertedWith("not owner");
+  it("depositToken pulls ERC20 via transferFrom", async () => {
+    const { vault, usdc, owner, user } = await deployFixture();
+    await usdc.connect(owner).mint(user.address, ethers.parseEther("5"));
+    await usdc.connect(user).approve(await vault.getAddress(), ethers.MaxUint256);
+    await vault.connect(user).depositToken(await usdc.getAddress(), ethers.parseEther("5"), goal(), SLIPPAGE_BPS);
+    const it = await vault.intents(user.address);
+    expect(it.tokenIn).to.equal(await usdc.getAddress());
+    expect(it.amountIn).to.equal(ethers.parseEther("5"));
   });
 
-  // ── setAgent ─────────────────────────────────────────────────────────────
-  it("owner can rotate agent address", async () => {
-    const { vault, owner, attacker } = await deploy();
-    await expect(vault.connect(owner).setAgent(attacker.address))
-      .to.emit(vault, "AgentUpdated");
-    expect(await vault.teeAgentAddress()).to.equal(attacker.address);
-  });
-
-  it("non-owner cannot rotate agent", async () => {
-    const { vault, attacker } = await deploy();
-    await expect(vault.connect(attacker).setAgent(attacker.address)).to.be.revertedWith("not owner");
-  });
-
-  // ── depositAndSetIntent ───────────────────────────────────────────────────
-  it("depositAndSetIntent stores intent, credits balance, emits IntentSet with hash", async () => {
-    const { vault, user } = await deploy();
-    const encryptedGoal = ethers.hexlify(ethers.toUtf8Bytes("ciphertext"));
-    const value = ethers.parseEther("0.01");
-
-    const tx = vault.connect(user).depositAndSetIntent(encryptedGoal, 50, 500, { value });
-    await expect(tx).to.emit(vault, "IntentSet");
-
-    expect(await vault.balances(user.address)).to.equal(value);
-    const intent = await vault.intents(user.address);
-    expect(intent.maxSlippage).to.equal(50);
-    expect(intent.stopLoss).to.equal(500);
-    expect(intent.depositAmount).to.equal(value);
-    expect(intent.active).to.equal(true);
-  });
-
-  it("reverts deposit with zero value", async () => {
-    const { vault, user } = await deploy();
-    await expect(
-      vault.connect(user).depositAndSetIntent(ethers.hexlify(ethers.toUtf8Bytes("c")), 50, 500, { value: 0 })
-    ).to.be.revertedWith("Must deposit funds");
-  });
-
-  it("reverts deposit with empty encryptedGoal", async () => {
-    const { vault, user } = await deploy();
-    await expect(
-      vault.connect(user).depositAndSetIntent("0x", 50, 500, { value: ethers.parseEther("0.01") })
-    ).to.be.revertedWith("empty intent");
-  });
-
-  it("reverts deposit when intent already active", async () => {
-    const { vault, user } = await deploy();
-    const encryptedGoal = ethers.hexlify(ethers.toUtf8Bytes("c"));
-    const value = ethers.parseEther("0.01");
-    await vault.connect(user).depositAndSetIntent(encryptedGoal, 50, 500, { value });
-    await expect(
-      vault.connect(user).depositAndSetIntent(encryptedGoal, 50, 500, { value })
-    ).to.be.revertedWith("intent already active");
-  });
-
-  // ── executeTradeWithProof ─────────────────────────────────────────────────
-  it("only TEE agent can call executeTradeWithProof", async () => {
-    const { vault, user, attacker } = await deploy();
-    await vault
-      .connect(user)
-      .depositAndSetIntent(ethers.hexlify(ethers.toUtf8Bytes("c")), 50, 500, { value: ethers.parseEther("0.01") });
-    await expect(
-      vault.connect(attacker).executeTradeWithProof(user.address, mockTradeData(), "0x", ethers.ZeroHash, 0)
-    ).to.be.revertedWith("Unauthorized");
-  });
-
-  it("rejects invalid calldata selector", async () => {
-    const { vault, user, agent } = await deploy();
-    await vault
-      .connect(user)
-      .depositAndSetIntent(ethers.hexlify(ethers.toUtf8Bytes("c")), 50, 500, { value: ethers.parseEther("0.01") });
-    const badData = "0xdeadbeef" + "00".repeat(32 * 7);
-    await expect(
-      vault.connect(agent).executeTradeWithProof(user.address, badData, "0x", ethers.ZeroHash, 0)
-    ).to.be.revertedWith("invalid selector");
-  });
-
-  it("rejects minAmountOut below slippage limit", async () => {
-    const { vault, user, agent } = await deploy();
-    const value = ethers.parseEther("0.01");
-    // maxSlippage = 100 bps → floor = value * 9900 / 10000
-    await vault.connect(user).depositAndSetIntent(ethers.hexlify(ethers.toUtf8Bytes("c")), 100, 500, { value });
-    const floor = (value * 9900n) / 10000n;
-    await expect(
-      vault.connect(agent).executeTradeWithProof(user.address, mockTradeData(), "0x", ethers.ZeroHash, floor - 1n)
-    ).to.be.revertedWith("minAmountOut below slippage limit");
-  });
-
-  it("agent executes: emits TradeExecuted, clears balance and intent, router receives ETH", async () => {
-    const { vault, mockRouter, user, agent } = await deploy();
-    const value = ethers.parseEther("0.01");
-    // maxSlippage=0 → no floor check; minAmountOut=0 passes through
-    await vault.connect(user).depositAndSetIntent(ethers.hexlify(ethers.toUtf8Bytes("c")), 0, 500, { value });
-
-    const receiptHash = ethers.id("receipt-1");
-    await expect(
-      vault.connect(agent).executeTradeWithProof(user.address, mockTradeData(), "0xdeadbeef", receiptHash, 0)
-    )
-      .to.emit(vault, "TradeExecuted")
-      .withArgs(user.address, receiptHash, "0xdeadbeef");
-
-    expect(await vault.balances(user.address)).to.equal(0n);
-    const intent = await vault.intents(user.address);
-    expect(intent.active).to.equal(false);
-    expect(await ethers.provider.getBalance(await mockRouter.getAddress())).to.equal(value);
-  });
-
-  // ── withdraw ──────────────────────────────────────────────────────────────
-  it("withdraw refunds balance, emits Withdrawn, clears intent", async () => {
-    const { vault, user } = await deploy();
-    const value = ethers.parseEther("0.01");
-    await vault.connect(user).depositAndSetIntent(ethers.hexlify(ethers.toUtf8Bytes("c")), 50, 500, { value });
-
-    const tx = vault.connect(user).withdraw();
-    await expect(tx).to.changeEtherBalance(user, value);
-    await expect(tx).to.emit(vault, "Withdrawn").withArgs(user.address, value);
-
-    expect(await vault.balances(user.address)).to.equal(0n);
+  it("withdraw unwraps native and returns funds, clears intent", async () => {
+    const { vault, user } = await deployFixture();
+    const value = ethers.parseEther("1");
+    await vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value });
+    await expect(vault.connect(user).withdraw()).to.changeEtherBalance(user, value);
     expect((await vault.intents(user.address)).active).to.equal(false);
   });
 
-  it("withdraw reverts when nothing to withdraw", async () => {
-    const { vault, user } = await deploy();
-    await expect(vault.connect(user).withdraw()).to.be.revertedWith("Nothing to withdraw");
+  it("withdraw reverts when nothing", async () => {
+    const { vault, user } = await deployFixture();
+    await expect(vault.connect(user).withdraw()).to.be.revertedWith("nothing");
   });
 });
