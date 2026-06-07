@@ -56,11 +56,11 @@ async function main() {
       log("intent", `user=${user} amount=${amount.toString()}`);
 
       const intent = await vault["intents"](user) as { encryptedGoal: string };
-      const plain = decryptIntent<{ goal: string; tokenOut?: string; maxSlippage: number }>(
+      const plain = decryptIntent<{ goal: string; tokenOut?: string }>(
         env.agentEciesSk,
         intent.encryptedGoal,
       );
-      log("decrypt", `goal="${plain.goal}" tokenOut=${plain.tokenOut ?? "USDT"}`);
+      log("decrypt", `goal="${plain.goal}" tokenOut=${plain.tokenOut ?? "USDC"}`);
 
       log("market", "building structured snapshot...");
       const market = await buildMarketSnapshot();
