@@ -17,11 +17,13 @@ const p: SuiExecParams = {
 const hex = (u: Uint8Array) => "0x" + Buffer.from(u).toString("hex");
 
 const { message, signature, publicKey } = await signSuiExec(kp, p);
-console.log("user        =", p.user);
-console.log("agentMinOut =", p.agentMinOut.toString());
-console.log("deadlineMs  =", p.deadlineMs.toString());
-console.log("receiptHash =", p.receiptHash);
-console.log("nonce       =", p.nonce.toString());
+console.log("--- vector A: agentMinOut=0 (happy path) ---");
 console.log("MESSAGE  =", hex(message));
 console.log("PUBKEY   =", hex(publicKey));
 console.log("SIGNATURE=", hex(signature));
+
+// Vector B: agentMinOut above the expected output, to exercise the slippage-floor reject.
+const pHigh: SuiExecParams = { ...p, agentMinOut: 2_000_000n };
+const high = await signSuiExec(kp, pHigh);
+console.log("--- vector B: agentMinOut=2000000 (slippage reject) ---");
+console.log("SIGNATURE_HIGH=", hex(high.signature));
