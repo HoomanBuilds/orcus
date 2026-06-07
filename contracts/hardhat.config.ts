@@ -7,10 +7,44 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY ?? "";
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.24",
-    settings: {
-      evmVersion: "cancun",
-      optimizer: { enabled: true, runs: 200 },
+    compilers: [
+      {
+        version: "0.8.24",
+        settings: {
+          evmVersion: "cancun",
+          optimizer: { enabled: true, runs: 200 },
+        },
+      },
+    ],
+    overrides: {
+      "@pythnetwork/pyth-sdk-solidity/MockPyth.sol": {
+        version: "0.8.24",
+        settings: {
+          evmVersion: "cancun",
+          optimizer: { enabled: true, runs: 200 },
+        },
+      },
+      "@pythnetwork/pyth-sdk-solidity/AbstractPyth.sol": {
+        version: "0.8.24",
+        settings: {
+          evmVersion: "cancun",
+          optimizer: { enabled: true, runs: 200 },
+        },
+      },
+      "@pythnetwork/pyth-sdk-solidity/PythErrors.sol": {
+        version: "0.8.24",
+        settings: {
+          evmVersion: "cancun",
+          optimizer: { enabled: true, runs: 200 },
+        },
+      },
+      "@pythnetwork/pyth-sdk-solidity/PythUtils.sol": {
+        version: "0.8.24",
+        settings: {
+          evmVersion: "cancun",
+          optimizer: { enabled: true, runs: 200 },
+        },
+      },
     },
   },
   networks: {
