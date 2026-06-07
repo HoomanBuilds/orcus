@@ -1,0 +1,8 @@
+[package]
+name = "orcus"
+edition = "2024"
+
+[dependencies]
+
+[addresses]
+orcus = "0x0"
