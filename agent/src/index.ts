@@ -9,6 +9,7 @@ import { buildMarketSnapshot } from "./indicators.js";
 import { buildDecisionReceipt } from "./receipt.js";
 import { signExecParams } from "./sign/execParams.js";
 import { getOgPriceScaled } from "./price/binance.js";
+import { buildPythPriceUpdate } from "./price/pyth.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
@@ -82,10 +83,14 @@ async function main() {
       if (chain.priceMode === "mock") {
         priceScaled = await getOgPriceScaled();
         priceUpdate = AbiCoder.defaultAbiCoder().encode(["uint256"], [priceScaled]);
-      } else if (chain.priceMode === "pyth") {
-        throw new Error("pyth price mode not implemented yet (Hermes VAA + update fee)");
       }
       const oracleAddr = await vault["oracle"]() as string;
+      if (chain.priceMode === "pyth") {
+        const built = await buildPythPriceUpdate(provider, wallet, oracleAddr);
+        priceUpdate = built.priceUpdate;
+        priceUpdateValue = built.value;
+        log("price", `pyth update fetched (fee=${priceUpdateValue} wei, mode=pyth)`);
+      }
       log("price", `0G/USD=${priceScaled?.toString() ?? "n/a"} (mode=${chain.priceMode})`);
 
       log("storage", "writing decision receipt to 0G Storage...");
