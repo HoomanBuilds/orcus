@@ -6,6 +6,9 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 const FEE = 3000;
 const SLIPPAGE_BPS = 100; // 1%
 
+// price update payload for the mock oracle: ABI-encoded priceScaled (0.5 oUSDC per wnative)
+const PRICE_UPDATE = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [ethers.parseEther("0.5")]);
+
 async function deployFixture() {
   const [owner, user, agent, attacker] = await ethers.getSigners();
 
@@ -30,6 +33,9 @@ async function deployFixture() {
     await router.getAddress(), await oracle.getAddress(),
     await wnative.getAddress(), owner.address,
   );
+
+  // the vault is the oracle's price updater (it calls updatePrice during executeTrade)
+  await oracle.connect(owner).setUpdater(await vault.getAddress());
 
   return { vault, usdc, wnative, router, oracle, owner, user, agent, attacker };
 }
@@ -133,7 +139,7 @@ describe("StrategyVault: execution (C-01, happy path)", () => {
       agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(agent).executeTrade(p, sig))
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE))
       .to.emit(vault, "TradeExecuted")
       .withArgs(user.address, await usdc.getAddress(), value / 2n, p.receiptHash);
     expect(await usdc.balanceOf(user.address)).to.equal(value / 2n);
@@ -150,7 +156,7 @@ describe("StrategyVault: execution (C-01, happy path)", () => {
       agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await vault.connect(agent).executeTrade(p, sig);
+    await vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE);
     expect(await usdc.balanceOf(attacker.address)).to.equal(0n);
     expect(await usdc.balanceOf(user.address)).to.equal(value / 2n);
   });
@@ -163,7 +169,7 @@ describe("StrategyVault: execution (C-01, happy path)", () => {
       agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(attacker).executeTrade(p, sig)).to.be.revertedWith("not agent");
+    await expect(vault.connect(attacker).executeTrade(p, sig, PRICE_UPDATE)).to.be.revertedWith("not agent");
   });
 });
 
@@ -183,7 +189,7 @@ describe("StrategyVault: slippage floor (C-02, H-04, H-07)", () => {
       agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(agent).executeTrade(p, sig)).to.emit(vault, "TradeExecuted");
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.emit(vault, "TradeExecuted");
     expect(await usdc.balanceOf(user.address)).to.equal(value / 2n);
   });
 
@@ -196,7 +202,7 @@ describe("StrategyVault: slippage floor (C-02, H-04, H-07)", () => {
       deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("slippage");
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.be.revertedWith("slippage");
   });
 
   it("deadline in the past reverts (H-07)", async () => {
@@ -206,7 +212,7 @@ describe("StrategyVault: slippage floor (C-02, H-04, H-07)", () => {
       agentMinOut: 0n, deadline: 1, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("expired");
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.be.revertedWith("expired");
   });
 
   it("maxSlippageBps > 10000 is rejected at deposit (H-04)", async () => {
@@ -231,7 +237,7 @@ describe("StrategyVault: attestation & replay (H-01)", () => {
   it("rejects a signature from a non-attestor key", async () => {
     const { vault, agent, attacker, p } = await setup();
     const badSig = await signExec(vault, attacker, p); // attacker != attestor(agent)
-    await expect(vault.connect(agent).executeTrade(p, badSig)).to.be.revertedWith("bad attestation");
+    await expect(vault.connect(agent).executeTrade(p, badSig, PRICE_UPDATE)).to.be.revertedWith("bad attestation");
   });
 
   it("rejects a wrong-chainId domain signature", async () => {
@@ -249,14 +255,14 @@ describe("StrategyVault: attestation & replay (H-01)", () => {
       ],
     };
     const wrongChainSig = await agent.signTypedData(domain, types, p);
-    await expect(vault.connect(agent).executeTrade(p, wrongChainSig)).to.be.revertedWith("bad attestation");
+    await expect(vault.connect(agent).executeTrade(p, wrongChainSig, PRICE_UPDATE)).to.be.revertedWith("bad attestation");
   });
 
   it("nonce replay reverts (each execution bumps the nonce)", async () => {
     const { vault, agent, p } = await setup();
     const sig = await signExec(vault, agent, p);
-    await vault.connect(agent).executeTrade(p, sig); // nonce 0 consumed
-    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("bad nonce");
+    await vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE); // nonce 0 consumed
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.be.revertedWith("bad nonce");
   });
 });
 
@@ -272,7 +278,7 @@ describe("StrategyVault: escape hatch & admin (M-06, H-03, H-06)", () => {
       agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("cancelling");
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.be.revertedWith("cancelling");
     await expect(vault.connect(user).withdraw()).to.changeEtherBalance(user, ethers.parseEther("2"));
   });
 
@@ -328,7 +334,7 @@ describe("StrategyVault: additional coverage", () => {
       agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(agent).executeTrade(p, sig)).to.be.revertedWith("no intent");
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.be.revertedWith("no intent");
   });
 
   it("double withdraw: second call reverts 'nothing'", async () => {
@@ -352,7 +358,7 @@ describe("StrategyVault: additional coverage", () => {
       agentMinOut: 0n, deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);
-    await expect(vault.connect(agent).executeTrade(p, sig)).to.emit(vault, "TradeExecuted");
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.emit(vault, "TradeExecuted");
     expect(await usdc.balanceOf(user.address)).to.equal(amt / 2n);
   });
 
