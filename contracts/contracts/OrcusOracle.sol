@@ -4,19 +4,17 @@ pragma solidity 0.8.24;
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @notice Push price oracle for 0G Galileo, where no Pyth/Chainlink contract is
-///         deployed. An off-chain updater (the agent) pushes the real
-///         wrapped-native/USD price fetched from the Binance public API (symbol
-///         0GUSDT). `priceScaled` is oUSDC-per-1-wrapped-native scaled by 1e18,
-///         assuming the settlement token is a ~1 USD stable with 18 decimals.
-///         On mainnet this is replaced by a Pyth pull adapter behind the same
-///         IPriceOracle interface (0G mainnet Pyth 0x2880aB155794e7179c9eE2e38200202908C17B43,
-///         feed Crypto.0G/USD).
+/// @notice Push price oracle for 0G Galileo (no Pyth/Chainlink on the testnet).
+///         The StrategyVault calls updatePrice() atomically inside executeTrade
+///         with the live Binance price (ABI-encoded uint256, oUSDC-per-1-
+///         wrapped-native scaled by 1e18), so the slippage floor always uses a
+///         fresh price. On mainnet a Pyth pull adapter implements the same
+///         interface (updatePrice forwards a Hermes VAA to pyth.updatePriceFeeds).
 contract OrcusOracle is IPriceOracle, Ownable {
     uint256 public priceScaled;
     uint256 public updatedAt;
-    uint256 public maxAge;     // staleness window in seconds; 0 disables the check
-    address public updater;
+    uint256 public maxAge;    // staleness window (s); 0 disables the check
+    address public updater;   // the StrategyVault (calls updatePrice during executeTrade)
 
     event PriceUpdated(uint256 priceScaled, uint256 at);
     event UpdaterUpdated(address indexed oldUpdater, address indexed newUpdater);
@@ -30,12 +28,9 @@ contract OrcusOracle is IPriceOracle, Ownable {
         emit MaxAgeUpdated(_maxAge);
     }
 
-    function setPrice(uint256 _priceScaled) external {
+    modifier onlyUpdater() {
         require(msg.sender == updater || msg.sender == owner(), "not updater");
-        require(_priceScaled > 0, "zero price");
-        priceScaled = _priceScaled;
-        updatedAt = block.timestamp;
-        emit PriceUpdated(_priceScaled, block.timestamp);
+        _;
     }
 
     function setUpdater(address _new) external onlyOwner {
@@ -47,6 +42,24 @@ contract OrcusOracle is IPriceOracle, Ownable {
     function setMaxAge(uint256 _maxAge) external onlyOwner {
         maxAge = _maxAge;
         emit MaxAgeUpdated(_maxAge);
+    }
+
+    /// @notice Seed/override the price directly (owner/updater). Used at deploy.
+    function setPrice(uint256 _priceScaled) external onlyUpdater {
+        _set(_priceScaled);
+    }
+
+    /// @notice Atomic refresh from ABI-encoded uint256, called by the vault.
+    function updatePrice(bytes calldata data) external payable onlyUpdater {
+        require(data.length == 32, "bad price data");
+        _set(abi.decode(data, (uint256)));
+    }
+
+    function _set(uint256 _priceScaled) private {
+        require(_priceScaled > 0, "zero price");
+        priceScaled = _priceScaled;
+        updatedAt = block.timestamp;
+        emit PriceUpdated(_priceScaled, block.timestamp);
     }
 
     function getExpectedOut(address, address, uint256 amountIn)

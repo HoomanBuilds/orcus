@@ -138,8 +138,8 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
 
     // execution
 
-    function executeTrade(ExecParams calldata p, bytes calldata signature)
-        external nonReentrant whenNotPaused
+    function executeTrade(ExecParams calldata p, bytes calldata signature, bytes calldata priceUpdate)
+        external payable nonReentrant whenNotPaused
     {
         require(msg.sender == agent, "not agent");
         require(p.deadline >= block.timestamp, "expired");
@@ -157,17 +157,17 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
         Intent memory it = intents[p.user];
         require(it.active && it.amountIn > 0, "no intent");
 
-        // IPriceOracle MUST return output denominated in tokenOut decimals; a
-        // real Pyth/Chainlink adapter must normalize feed decimals (audit H-05).
-        uint256 expectedOut = oracle.getExpectedOut(it.tokenIn, p.tokenOut, it.amountIn);
-        require(expectedOut > 0, "oracle zero");
-        uint256 floorOut = (expectedOut * (MAX_BPS - it.maxSlippageBps)) / MAX_BPS;
-        uint256 minOut = floorOut > p.agentMinOut ? floorOut : p.agentMinOut;
-
         // effects before interactions
         intentNonce[p.user] = p.nonce + 1;
         delete intents[p.user];
         delete cancelRequestedAt[p.user];
+
+        // atomic fresh price: refresh, then read the floor from the same value
+        oracle.updatePrice{value: msg.value}(priceUpdate);
+        uint256 expectedOut = oracle.getExpectedOut(it.tokenIn, p.tokenOut, it.amountIn);
+        require(expectedOut > 0, "oracle zero");
+        uint256 floorOut = (expectedOut * (MAX_BPS - it.maxSlippageBps)) / MAX_BPS;
+        uint256 minOut = floorOut > p.agentMinOut ? floorOut : p.agentMinOut;
 
         IERC20(it.tokenIn).forceApprove(address(swapRouter), it.amountIn);
         uint256 amountOut = swapRouter.exactInputSingle(ISwapRouter.ExactInputSingleParams({
