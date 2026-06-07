@@ -38,5 +38,16 @@ describe("resolveChain", () => {
   it("lists known chains", () => {
     expect(chainKeys()).toContain("galileo");
     expect(chainKeys()).toContain("arbitrum-sepolia");
+    expect(chainKeys()).toContain("base");
+    expect(chainKeys()).toContain("avalanche");
+    expect(chainKeys()).toContain("mantle");
+  });
+
+  it("uses pyth price mode on mainnet EVM chains", () => {
+    for (const [c, ve] of [["base", "BASE_VAULT"], ["avalanche", "AVALANCHE_VAULT"], ["mantle", "MANTLE_VAULT"]]) {
+      process.env.CHAIN = c;
+      process.env[ve] = "0x3333333333333333333333333333333333333333";
+      expect(resolveChain().priceMode).toBe("pyth");
+    }
   });
 });

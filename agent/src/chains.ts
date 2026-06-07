@@ -65,6 +65,53 @@ const META: Record<string, ChainMeta> = {
     usdcEnv: "ARBITRUM_SEPOLIA_USDC",
     usdcDefault: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Circle test USDC (verified)
   },
+  // Mainnet EVM chains (priceMode "pyth"). Verify usdcDefault + the deepest pool's
+  // fee tier on each explorer before deploying value; set the vault env after deploy.
+  base: {
+    key: "base",
+    name: "Base",
+    chainId: 8453,
+    poolFee: 3000,
+    priceMode: "pyth",
+    explorerTx: "https://basescan.org/tx/",
+    lookbackBlocks: 5000,
+    pollIntervalMs: 4000,
+    rpcEnv: "BASE_RPC",
+    rpcDefault: "https://mainnet.base.org",
+    vaultEnv: "BASE_VAULT",
+    usdcEnv: "BASE_USDC",
+    usdcDefault: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // native USDC on Base
+  },
+  avalanche: {
+    key: "avalanche",
+    name: "Avalanche C-Chain",
+    chainId: 43114,
+    poolFee: 3000,
+    priceMode: "pyth",
+    explorerTx: "https://snowtrace.io/tx/",
+    lookbackBlocks: 5000,
+    pollIntervalMs: 4000,
+    rpcEnv: "AVALANCHE_RPC",
+    rpcDefault: "https://api.avax.network/ext/bc/C/rpc",
+    vaultEnv: "AVALANCHE_VAULT",
+    usdcEnv: "AVALANCHE_USDC",
+    usdcDefault: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", // native USDC on Avalanche
+  },
+  mantle: {
+    key: "mantle",
+    name: "Mantle",
+    chainId: 5000,
+    poolFee: 3000,
+    priceMode: "pyth",
+    explorerTx: "https://explorer.mantle.xyz/tx/",
+    lookbackBlocks: 5000,
+    pollIntervalMs: 4000,
+    rpcEnv: "MANTLE_RPC",
+    rpcDefault: "https://rpc.mantle.xyz",
+    vaultEnv: "MANTLE_VAULT",
+    usdcEnv: "MANTLE_USDC",
+    usdcDefault: "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9", // USDC on Mantle (verify)
+  },
 };
 
 export function chainKeys(): string[] {
