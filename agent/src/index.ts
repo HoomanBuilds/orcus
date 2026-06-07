@@ -1,4 +1,4 @@
-import { Contract, JsonRpcProvider, Wallet, zeroPadValue } from "ethers";
+import { AbiCoder, Contract, JsonRpcProvider, Wallet, zeroPadValue } from "ethers";
 import { Indexer } from "@0gfoundation/0g-ts-sdk";
 import { env } from "./env.js";
 import { resolveChain } from "./chains.js";
@@ -75,16 +75,18 @@ async function main() {
         return;
       }
 
-      // Push the live price first so the receipt records exactly what was used.
+      // Build the fresh price update applied atomically inside executeTrade.
       let priceScaled: bigint | null = null;
-      let oracleAddr: string | null = null;
-      if (chain.priceMode === "agent-push") {
-        oracleAddr = await vault["oracle"]() as string;
-        const oracle = new Contract(oracleAddr, ["function setPrice(uint256)"], wallet);
+      let priceUpdate = "0x";
+      let priceUpdateValue = 0n;
+      if (chain.priceMode === "mock") {
         priceScaled = await getOgPriceScaled();
-        log("price", `pushing 0G/USD=${priceScaled.toString()} to oracle ${oracleAddr}`);
-        await (await oracle["setPrice"](priceScaled) as { wait(): Promise<unknown> }).wait();
+        priceUpdate = AbiCoder.defaultAbiCoder().encode(["uint256"], [priceScaled]);
+      } else if (chain.priceMode === "pyth") {
+        throw new Error("pyth price mode not implemented yet (Hermes VAA + update fee)");
       }
+      const oracleAddr = await vault["oracle"]() as string;
+      log("price", `0G/USD=${priceScaled?.toString() ?? "n/a"} (mode=${chain.priceMode})`);
 
       log("storage", "writing decision receipt to 0G Storage...");
       const receipt = buildDecisionReceipt({
@@ -132,7 +134,7 @@ async function main() {
       const signature = await signExecParams(wallet, chain.chainId, chain.vault, params);
 
       log("swap", `executeTrade requested=${requested} settle=oUSDC(${tokenOut}) nonce=${nonce}`);
-      const tx = await vault["executeTrade"](params, signature);
+      const tx = await vault["executeTrade"](params, signature, priceUpdate, { value: priceUpdateValue });
       const r = await (tx as { wait(): Promise<{ hash: string }> }).wait();
       log("swap", `executed tx=${r?.hash}`);
     } catch (e) {
