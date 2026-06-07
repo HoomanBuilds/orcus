@@ -17,7 +17,7 @@ async function main() {
   console.log("WrappedNative:", await wnative.getAddress());
 
   // updater = agent (pushes the live Binance price); maxAge = 0 (no staleness revert on the demo)
-  const oracle = await (await ethers.getContractFactory("OrcusOracle")).deploy(deployer.address, agent, 0);
+  const oracle = await (await ethers.getContractFactory("OrcusOracle")).deploy(deployer.address, deployer.address, 0);
   await oracle.waitForDeployment();
   console.log("OrcusOracle:  ", await oracle.getAddress());
 
@@ -43,6 +43,11 @@ async function main() {
   await vault.waitForDeployment();
   const vaultAddr = await vault.getAddress();
   console.log("StrategyVault:", vaultAddr);
+
+  const setUpd = await oracle.setUpdater(vaultAddr);
+  await setUpd.wait();
+  console.log("Oracle updater set to vault");
+
   console.log("Explorer:", `https://chainscan-galileo.0g.ai/address/${vaultAddr}`);
 }
 
