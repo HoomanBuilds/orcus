@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-export type PriceMode = "agent-push" | "onchain";
+export type PriceMode = "mock" | "pyth";
 
 export interface ChainConfig {
   key: string;
@@ -10,8 +10,8 @@ export interface ChainConfig {
   vault: string;        // deployed StrategyVault (v2)
   usdc: string;         // settlement token used as ExecParams.tokenOut
   poolFee: number;      // Uniswap V3 fee tier for ExecParams.fee
-  priceMode: PriceMode; // "agent-push": agent feeds Binance price to the push oracle (Galileo).
-                        // "onchain": chain has a real oracle (Pyth/Chainlink); no push.
+  priceMode: PriceMode; // "mock": agent ABI-encodes the Binance price into priceUpdate (testnet).
+                        // "pyth": agent fetches a Hermes VAA into priceUpdate + sends the update fee (mainnet).
   explorerTx: string;
   lookbackBlocks: number;
   pollIntervalMs: number;
@@ -41,7 +41,7 @@ const META: Record<string, ChainMeta> = {
     name: "0G Galileo",
     chainId: 16602,
     poolFee: 3000,
-    priceMode: "agent-push",
+    priceMode: "mock",
     explorerTx: "https://chainscan-galileo.0g.ai/tx/",
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,
@@ -55,7 +55,7 @@ const META: Record<string, ChainMeta> = {
     name: "Arbitrum Sepolia",
     chainId: 421614,
     poolFee: 3000,
-    priceMode: "onchain",
+    priceMode: "pyth",
     explorerTx: "https://sepolia.arbiscan.io/tx/",
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,

@@ -19,9 +19,9 @@ describe("resolveChain", () => {
     expect(resolveChain().chainId).toBe(16602);
   });
 
-  it("uses agent-push price mode on galileo", () => {
+  it("uses mock price mode on galileo", () => {
     process.env.CHAIN = "galileo";
-    expect(resolveChain().priceMode).toBe("agent-push");
+    expect(resolveChain().priceMode).toBe("mock");
   });
 
   it("throws on unknown chain", () => {
