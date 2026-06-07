@@ -12,9 +12,9 @@ export interface DecisionReceipt {
   inputs: {
     market: unknown; // structured public market snapshot (price/trend + MA/RSI/volatility)
     oracle: {
-      mode: string;               // "agent-push" | "onchain"
+      mode: string;               // "mock" | "pyth"
       address: string | null;     // oracle contract used for the slippage floor
-      priceScaled: string | null; // price pushed on-chain this trade (1e18), if agent-push
+      priceScaled: string | null; // price applied on-chain this trade (1e18), if mock mode
     };
   };
   tee: { provider: string; verifiability: "TeeML" };

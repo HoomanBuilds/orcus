@@ -7,7 +7,7 @@ const base = {
   user: "0xUser",
   ts: 1_700_000_000_000,
   marketJson: JSON.stringify({ price: 0.3, trend: "up", indicators: { rsi14: 55 } }),
-  oracleMode: "agent-push",
+  oracleMode: "mock",
   oracleAddress: "0xOracle",
   priceScaled: "300000000000000000",
   teeProvider: "0xProvider",
@@ -21,7 +21,7 @@ describe("buildDecisionReceipt", () => {
     expect(r.version).toBe("1");
     expect(r.chain).toEqual({ key: "galileo", chainId: 16602 });
     expect(r.verdict).toEqual({ action: "EXECUTE", reason: "price above MA, momentum positive" });
-    expect(r.inputs.oracle).toEqual({ mode: "agent-push", address: "0xOracle", priceScaled: "300000000000000000" });
+    expect(r.inputs.oracle).toEqual({ mode: "mock", address: "0xOracle", priceScaled: "300000000000000000" });
     expect((r.inputs.market as { price: number }).price).toBe(0.3);
     expect(r.tee.verifiability).toBe("TeeML");
   });
@@ -39,8 +39,8 @@ describe("buildDecisionReceipt", () => {
     expect((r.inputs.market as { raw: string }).raw).toBe("not json");
   });
 
-  it("nulls the pushed price for onchain oracle mode", () => {
-    const r = buildDecisionReceipt({ ...base, oracleMode: "onchain", oracleAddress: null, priceScaled: null });
-    expect(r.inputs.oracle).toEqual({ mode: "onchain", address: null, priceScaled: null });
+  it("nulls the applied price for pyth oracle mode", () => {
+    const r = buildDecisionReceipt({ ...base, oracleMode: "pyth", oracleAddress: null, priceScaled: null });
+    expect(r.inputs.oracle).toEqual({ mode: "pyth", address: null, priceScaled: null });
   });
 });
