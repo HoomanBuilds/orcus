@@ -587,11 +587,16 @@ export const vaultAbi = [
         "internalType": "bytes",
         "name": "signature",
         "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "priceUpdate",
+        "type": "bytes"
       }
     ],
     "name": "executeTrade",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
