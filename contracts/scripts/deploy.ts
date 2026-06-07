@@ -53,7 +53,10 @@ async function deployMock(deployer: { address: string }, agent: string) {
 
 async function deployReal(deployer: { address: string }, agent: string) {
   // Real chain addresses (verify on the chain explorer before use):
-  const swapRouter = req("SWAP_ROUTER"); // Uniswap V3 SwapRouter02
+  // SWAP_ROUTER must be the ORIGINAL Uniswap V3 SwapRouter (selector 0x414bf389, struct
+  // WITH deadline) - our ISwapRouter matches it, NOT SwapRouter02 (0x68b3..., no deadline).
+  // On Arbitrum/Ethereum/Optimism/Polygon the original is 0xE592427A0AEce92De3Edee1F18E0157C05861564.
+  const swapRouter = req("SWAP_ROUTER");
   const usdc = req("USDC");              // native USDC (Circle)
   const weth = req("WETH");              // wrapped native (tokenIn)
   const pyth = req("PYTH");              // Pyth contract on this chain
