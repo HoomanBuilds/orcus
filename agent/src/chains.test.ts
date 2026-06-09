@@ -35,19 +35,35 @@ describe("resolveChain", () => {
     expect(() => resolveChain()).toThrow(/no vault address/);
   });
 
-  it("lists known chains", () => {
-    expect(chainKeys()).toContain("galileo");
-    expect(chainKeys()).toContain("arbitrum-sepolia");
-    expect(chainKeys()).toContain("base");
-    expect(chainKeys()).toContain("avalanche");
-    expect(chainKeys()).toContain("mantle");
+  it("lists the testnet chains", () => {
+    for (const c of ["galileo", "arbitrum-sepolia", "base-sepolia", "avalanche-fuji", "mantle-sepolia"]) {
+      expect(chainKeys()).toContain(c);
+    }
   });
 
-  it("uses pyth price mode on mainnet EVM chains", () => {
-    for (const [c, ve] of [["base", "BASE_VAULT"], ["avalanche", "AVALANCHE_VAULT"], ["mantle", "MANTLE_VAULT"]]) {
+  it("every chain is mock price mode with a native Binance symbol", () => {
+    const addr = "0x3333333333333333333333333333333333333333";
+    const envs: Record<string, [string, string]> = {
+      "galileo": ["VAULT_ADDRESS", "USDC_ADDRESS"],
+      "arbitrum-sepolia": ["ARBITRUM_SEPOLIA_VAULT", "ARBITRUM_SEPOLIA_USDC"],
+      "base-sepolia": ["BASE_SEPOLIA_VAULT", "BASE_SEPOLIA_USDC"],
+      "avalanche-fuji": ["FUJI_VAULT", "FUJI_USDC"],
+      "mantle-sepolia": ["MANTLE_SEPOLIA_VAULT", "MANTLE_SEPOLIA_USDC"],
+    };
+    for (const [c, [ve, ue]] of Object.entries(envs)) {
       process.env.CHAIN = c;
-      process.env[ve] = "0x3333333333333333333333333333333333333333";
-      expect(resolveChain().priceMode).toBe("pyth");
+      process.env[ve] = addr;
+      process.env[ue] = addr;
+      const cfg = resolveChain();
+      expect(cfg.priceMode).toBe("mock");
+      expect(cfg.binanceSymbol.endsWith("USDT")).toBe(true);
     }
+  });
+
+  it("throws when the settlement token is unset", () => {
+    process.env.CHAIN = "arbitrum-sepolia";
+    process.env.ARBITRUM_SEPOLIA_VAULT = "0x3333333333333333333333333333333333333333";
+    delete process.env.ARBITRUM_SEPOLIA_USDC;
+    expect(() => resolveChain()).toThrow(/settlement token/);
   });
 });
