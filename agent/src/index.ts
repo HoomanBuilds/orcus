@@ -68,7 +68,7 @@ async function main() {
       log("market", `price=${mkt.price} trend=${mkt.trend} rsi14=${mkt.indicators?.rsi14 ?? "n/a"}`);
 
       log("tee", "calling sealed inference...");
-      const decision = await sealedDecide(chain.zgServiceUrl, chain.zgApiSecret, JSON.stringify(plain), market);
+      const decision = await sealedDecide(chain.zgServiceUrl, chain.zgApiSecret, chain.zgModel, JSON.stringify(plain), market);
       log("tee", `action=${decision.action} reason="${decision.reason}"`);
 
       if (decision.action !== "EXECUTE") {

@@ -88,4 +88,15 @@ describe("resolveChain", () => {
     expect(cfg.zgServiceUrl).toBe("https://galileo.tee.example");
     expect(cfg.zgApiSecret).toBe("galileo-secret");
   });
+
+  it("defaults zgModel to the allotted 7B, overridable per chain then shared", () => {
+    process.env.CHAIN = "galileo";
+    delete process.env.GALILEO_ZG_MODEL;
+    delete process.env.ZG_MODEL;
+    expect(resolveChain().zgModel).toBe("qwen/qwen2.5-omni-7b");
+    process.env.ZG_MODEL = "shared-model";
+    expect(resolveChain().zgModel).toBe("shared-model");
+    process.env.GALILEO_ZG_MODEL = "0GM-1.0-35B-A3B";
+    expect(resolveChain().zgModel).toBe("0GM-1.0-35B-A3B");
+  });
 });

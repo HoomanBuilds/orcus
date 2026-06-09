@@ -19,6 +19,7 @@ export interface ChainConfig {
   pollIntervalMs: number;
   zgServiceUrl: string;
   zgApiSecret: string;
+  zgModel: string;
 }
 
 interface ChainMeta {
@@ -38,6 +39,7 @@ interface ChainMeta {
   usdcEnv: string;
   zgUrlEnv: string;
   zgSecretEnv: string;
+  zgModelEnv: string;
 }
 
 // TESTNET deployments. Every chain runs the self-contained MOCK stack (deploy DEPLOY_MODE=mock):
@@ -62,6 +64,7 @@ const META: Record<string, ChainMeta> = {
     usdcEnv: "USDC_ADDRESS",
     zgUrlEnv: "GALILEO_ZG_SERVICE_URL",
     zgSecretEnv: "GALILEO_ZG_API_SECRET",
+    zgModelEnv: "GALILEO_ZG_MODEL",
   },
   "arbitrum-sepolia": {
     key: "arbitrum-sepolia",
@@ -80,6 +83,7 @@ const META: Record<string, ChainMeta> = {
     usdcEnv: "ARBITRUM_SEPOLIA_USDC",
     zgUrlEnv: "ARBITRUM_SEPOLIA_ZG_SERVICE_URL",
     zgSecretEnv: "ARBITRUM_SEPOLIA_ZG_API_SECRET",
+    zgModelEnv: "ARBITRUM_SEPOLIA_ZG_MODEL",
   },
   "base-sepolia": {
     key: "base-sepolia",
@@ -98,6 +102,7 @@ const META: Record<string, ChainMeta> = {
     usdcEnv: "BASE_SEPOLIA_USDC",
     zgUrlEnv: "BASE_SEPOLIA_ZG_SERVICE_URL",
     zgSecretEnv: "BASE_SEPOLIA_ZG_API_SECRET",
+    zgModelEnv: "BASE_SEPOLIA_ZG_MODEL",
   },
   "avalanche-fuji": {
     key: "avalanche-fuji",
@@ -116,6 +121,7 @@ const META: Record<string, ChainMeta> = {
     usdcEnv: "FUJI_USDC",
     zgUrlEnv: "FUJI_ZG_SERVICE_URL",
     zgSecretEnv: "FUJI_ZG_API_SECRET",
+    zgModelEnv: "FUJI_ZG_MODEL",
   },
   "mantle-sepolia": {
     key: "mantle-sepolia",
@@ -134,6 +140,7 @@ const META: Record<string, ChainMeta> = {
     usdcEnv: "MANTLE_SEPOLIA_USDC",
     zgUrlEnv: "MANTLE_SEPOLIA_ZG_SERVICE_URL",
     zgSecretEnv: "MANTLE_SEPOLIA_ZG_API_SECRET",
+    zgModelEnv: "MANTLE_SEPOLIA_ZG_MODEL",
   },
 };
 
@@ -156,11 +163,12 @@ export function resolveChain(): ChainConfig {
   }
   const zgServiceUrl = process.env[m.zgUrlEnv] ?? process.env.ZG_SERVICE_URL ?? "";
   const zgApiSecret  = process.env[m.zgSecretEnv] ?? process.env.ZG_API_SECRET ?? "";
+  const zgModel      = process.env[m.zgModelEnv] ?? process.env.ZG_MODEL ?? "qwen/qwen2.5-omni-7b";
   return {
     key: m.key, name: m.name, chainId: m.chainId, rpc, vault, usdc,
     poolFee: m.poolFee, priceMode: m.priceMode,
     binanceSymbol: m.binanceSymbol, coingeckoId: m.coingeckoId,
     explorerTx: m.explorerTx, lookbackBlocks: m.lookbackBlocks, pollIntervalMs: m.pollIntervalMs,
-    zgServiceUrl, zgApiSecret,
+    zgServiceUrl, zgApiSecret, zgModel,
   };
 }

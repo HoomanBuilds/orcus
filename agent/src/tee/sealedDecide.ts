@@ -5,6 +5,7 @@ export type Decision =
 export async function sealedDecide(
   serviceUrl: string,
   apiSecret: string,
+  model: string,
   intentJson: string,
   market: string,
 ): Promise<Decision> {
@@ -22,7 +23,7 @@ export async function sealedDecide(
       "Authorization": `Bearer ${apiSecret}`,
     },
     body: JSON.stringify({
-      model: "qwen/qwen-2.5-7b-instruct",
+      model,
       messages: [
         {
           role: "system",
