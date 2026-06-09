@@ -63,7 +63,7 @@ async function main() {
       log("decrypt", `goal="${plain.goal}" tokenOut=${plain.tokenOut ?? "USDC"}`);
 
       log("market", "building structured snapshot...");
-      const market = await buildMarketSnapshot();
+      const market = await buildMarketSnapshot(chain.binanceSymbol, chain.coingeckoId);
       const mkt = JSON.parse(market) as { price?: number; trend?: string; indicators?: { rsi14?: number | null } };
       log("market", `price=${mkt.price} trend=${mkt.trend} rsi14=${mkt.indicators?.rsi14 ?? "n/a"}`);
 
@@ -81,7 +81,7 @@ async function main() {
       let priceUpdate = "0x";
       let priceUpdateValue = 0n;
       if (chain.priceMode === "mock") {
-        priceScaled = await getOgPriceScaled();
+        priceScaled = await getOgPriceScaled(chain.binanceSymbol, chain.coingeckoId);
         priceUpdate = AbiCoder.defaultAbiCoder().encode(["uint256"], [priceScaled]);
       }
       const oracleAddr = await vault["oracle"]() as string;

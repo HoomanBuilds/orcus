@@ -1,11 +1,15 @@
 import { parseUnits } from "ethers";
 
-// Real 0G/USD price scaled to 1e18 (USD per 1 wrapped-native, * 1e18).
-// Primary: Binance public API (no key). Fallback: CoinGecko. Throws if both fail.
-export async function getOgPriceScaled(): Promise<bigint> {
+// Native/USD price scaled to 1e18 (USD per 1 wrapped-native, * 1e18). Per-chain symbol
+// (e.g. ETHUSDT on Arbitrum Sepolia, 0GUSDT on Galileo). Primary: Binance public API
+// (no key). Fallback: CoinGecko by coin id. Throws if both fail.
+export async function getOgPriceScaled(
+  symbol = "0GUSDT",
+  coingeckoId = "zero-gravity",
+): Promise<bigint> {
   try {
     const res = await fetch(
-      "https://api.binance.com/api/v3/ticker/price?symbol=0GUSDT",
+      `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
       { signal: AbortSignal.timeout(5000) },
     );
     if (res.ok) {
@@ -17,16 +21,16 @@ export async function getOgPriceScaled(): Promise<bigint> {
   }
   try {
     const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=zero-gravity&vs_currencies=usd",
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`,
       { signal: AbortSignal.timeout(5000) },
     );
     if (res.ok) {
       const d = (await res.json()) as Record<string, { usd?: number }>;
-      const p = d["zero-gravity"]?.usd;
+      const p = d[coingeckoId]?.usd;
       if (p && p > 0) return parseUnits(p.toString(), 18);
     }
   } catch {
     // fall through to throw
   }
-  throw new Error("no price source (binance + coingecko failed)");
+  throw new Error(`no price source for ${symbol}/${coingeckoId} (binance + coingecko failed)`);
 }

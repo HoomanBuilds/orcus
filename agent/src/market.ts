@@ -1,8 +1,11 @@
-export async function getMarketSnapshot(): Promise<string> {
-  // Binance: real 0G market data (keyless). Falls back to CoinGecko, then a stub.
+// Per-chain native market snapshot (Binance keyless, CoinGecko fallback, then a stub).
+export async function getMarketSnapshot(
+  symbol = "0GUSDT",
+  coingeckoId = "zero-gravity",
+): Promise<string> {
   try {
     const res = await fetch(
-      "https://api.binance.com/api/v3/ticker/24hr?symbol=0GUSDT",
+      `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
       { signal: AbortSignal.timeout(5000) },
     );
     if (res.ok) {
@@ -25,12 +28,12 @@ export async function getMarketSnapshot(): Promise<string> {
 
   try {
     const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=zero-gravity&vs_currencies=usd&include_24hr_change=true",
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd&include_24hr_change=true`,
       { signal: AbortSignal.timeout(5000) },
     );
     if (res.ok) {
       const data = (await res.json()) as Record<string, { usd?: number; usd_24h_change?: number }>;
-      const entry = data["zero-gravity"];
+      const entry = data[coingeckoId];
       if (entry?.usd !== undefined) {
         const change = entry.usd_24h_change ?? 0;
         return JSON.stringify({

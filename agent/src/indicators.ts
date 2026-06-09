@@ -75,8 +75,11 @@ export async function fetchKlineCloses(
  * market.ts, Binance-first) enriched with agent-computed MA / RSI / volatility.
  * Indicator fields are null when klines are unavailable.
  */
-export async function buildMarketSnapshot(symbol = "0GUSDT"): Promise<string> {
-  const base = JSON.parse(await getMarketSnapshot()) as {
+export async function buildMarketSnapshot(
+  symbol = "0GUSDT",
+  coingeckoId = "zero-gravity",
+): Promise<string> {
+  const base = JSON.parse(await getMarketSnapshot(symbol, coingeckoId)) as {
     ts: number; price: number; change24h: string; trend: string; source?: string; note?: string;
   };
   const closes = await fetchKlineCloses(symbol, "1h", 120);
