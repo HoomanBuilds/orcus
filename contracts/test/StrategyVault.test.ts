@@ -369,3 +369,30 @@ describe("StrategyVault: additional coverage", () => {
     await expect(vault.connect(user).requestCancel()).to.be.revertedWith("already requested");
   });
 });
+
+describe("StrategyVault: SwapRouter02 (no-deadline) path", () => {
+  it("executes via a routerKind=1 SwapRouter02-style router (Base/Avalanche)", async () => {
+    const { vault, usdc, oracle, owner, user, agent } = await deployFixture();
+    const r2 = await (await ethers.getContractFactory("MockSwapRouter02"))
+      .deploy(await usdc.getAddress(), await oracle.getAddress());
+    await usdc.connect(owner).mint(await r2.getAddress(), ethers.parseEther("1000000"));
+    await vault.connect(owner).setSwapRouter(await r2.getAddress());
+    await vault.connect(owner).setRouterKind(1);
+
+    const value = ethers.parseEther("2");
+    await vault.connect(user).depositNative(goal(), SLIPPAGE_BPS, { value });
+    const deadline = (await time.latest()) + 300;
+    const p = {
+      user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
+      agentMinOut: 0n, deadline, receiptHash: ethers.id("r2"), nonce: 0n,
+    };
+    const sig = await signExec(vault, agent, p);
+    await expect(vault.connect(agent).executeTrade(p, sig, PRICE_UPDATE)).to.emit(vault, "TradeExecuted");
+    expect(await usdc.balanceOf(user.address)).to.equal(value / 2n);
+  });
+
+  it("setRouterKind rejects values > 1", async () => {
+    const { vault, owner } = await deployFixture();
+    await expect(vault.connect(owner).setRouterKind(2)).to.be.revertedWith("bad kind");
+  });
+});

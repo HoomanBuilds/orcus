@@ -9,6 +9,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ISwapRouter} from "./interfaces/ISwapRouter.sol";
+import {ISwapRouter02} from "./interfaces/ISwapRouter02.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 import {IWrappedNative} from "./interfaces/IWrappedNative.sol";
 
@@ -52,7 +53,8 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
 
     address public agent;
     address public attestor;
-    ISwapRouter   public swapRouter;
+    address public swapRouter;
+    uint8   public routerKind; // 0 = original SwapRouter (deadline); 1 = SwapRouter02 (no deadline)
     IPriceOracle  public oracle;
     IWrappedNative public immutable wrappedNative;
 
@@ -63,6 +65,7 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
     event AgentUpdated(address indexed oldAgent, address indexed newAgent);
     event AttestorUpdated(address indexed oldAttestor, address indexed newAttestor);
     event SwapRouterUpdated(address indexed oldRouter, address indexed newRouter);
+    event RouterKindUpdated(uint8 kind);
     event OracleUpdated(address indexed oldOracle, address indexed newOracle);
 
     constructor(
@@ -80,7 +83,7 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
         require(_wrappedNative.code.length > 0, "wnative not contract");
         agent = _agent;
         attestor = _attestor;
-        swapRouter = ISwapRouter(_swapRouter);
+        swapRouter = _swapRouter; // routerKind defaults to 0 (original SwapRouter); set 1 for SwapRouter02 chains
         oracle = IPriceOracle(_oracle);
         wrappedNative = IWrappedNative(_wrappedNative);
         emit AgentUpdated(address(0), _agent);
@@ -169,18 +172,31 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
         uint256 floorOut = (expectedOut * (MAX_BPS - it.maxSlippageBps)) / MAX_BPS;
         uint256 minOut = floorOut > p.agentMinOut ? floorOut : p.agentMinOut;
 
-        IERC20(it.tokenIn).forceApprove(address(swapRouter), it.amountIn);
-        uint256 amountOut = swapRouter.exactInputSingle(ISwapRouter.ExactInputSingleParams({
-            tokenIn: it.tokenIn,
-            tokenOut: p.tokenOut,
-            fee: p.fee,
-            recipient: address(this),
-            deadline: p.deadline,
-            amountIn: it.amountIn,
-            amountOutMinimum: minOut,
-            sqrtPriceLimitX96: 0
-        }));
-        IERC20(it.tokenIn).forceApprove(address(swapRouter), 0);
+        IERC20(it.tokenIn).forceApprove(swapRouter, it.amountIn);
+        uint256 amountOut;
+        if (routerKind == 0) {
+            amountOut = ISwapRouter(swapRouter).exactInputSingle(ISwapRouter.ExactInputSingleParams({
+                tokenIn: it.tokenIn,
+                tokenOut: p.tokenOut,
+                fee: p.fee,
+                recipient: address(this),
+                deadline: p.deadline,
+                amountIn: it.amountIn,
+                amountOutMinimum: minOut,
+                sqrtPriceLimitX96: 0
+            }));
+        } else {
+            amountOut = ISwapRouter02(swapRouter).exactInputSingle(ISwapRouter02.ExactInputSingleParams({
+                tokenIn: it.tokenIn,
+                tokenOut: p.tokenOut,
+                fee: p.fee,
+                recipient: address(this),
+                amountIn: it.amountIn,
+                amountOutMinimum: minOut,
+                sqrtPriceLimitX96: 0
+            }));
+        }
+        IERC20(it.tokenIn).forceApprove(swapRouter, 0);
 
         require(amountOut > 0 && amountOut >= minOut, "slippage");
         IERC20(p.tokenOut).safeTransfer(p.user, amountOut);
@@ -227,8 +243,17 @@ contract StrategyVault is Ownable2Step, ReentrancyGuard, Pausable, EIP712 {
 
     function setSwapRouter(address _new) external onlyOwner {
         require(_new.code.length > 0, "router not contract");
-        emit SwapRouterUpdated(address(swapRouter), _new);
-        swapRouter = ISwapRouter(_new);
+        emit SwapRouterUpdated(swapRouter, _new);
+        swapRouter = _new;
+    }
+
+    /// @notice 0 = original Uniswap V3 SwapRouter (exactInputSingle WITH deadline);
+    ///         1 = SwapRouter02 (no deadline). Set 1 on chains where only SwapRouter02
+    ///         is deployed (e.g. Base, Avalanche).
+    function setRouterKind(uint8 _kind) external onlyOwner {
+        require(_kind <= 1, "bad kind");
+        routerKind = _kind;
+        emit RouterKindUpdated(_kind);
     }
 
     function setOracle(address _new) external onlyOwner {
