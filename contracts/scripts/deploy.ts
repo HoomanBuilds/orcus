@@ -52,16 +52,28 @@ async function deployMock(deployer: { address: string }, agent: string) {
 }
 
 async function deployReal(deployer: { address: string }, agent: string) {
-  // Real chain addresses (verify on the chain explorer before use):
-  // SWAP_ROUTER must be the ORIGINAL Uniswap V3 SwapRouter (selector 0x414bf389, struct
-  // WITH deadline) - our ISwapRouter matches it, NOT SwapRouter02 (0x68b3..., no deadline).
-  // On Arbitrum/Ethereum/Optimism/Polygon the original is 0xE592427A0AEce92De3Edee1F18E0157C05861564.
+  // Verified deploy addresses (primary sources + live APIs, 2026-06-09). ROUTER_KIND:
+  // 0 = original Uniswap V3 SwapRouter (exactInputSingle WITH deadline); 1 = SwapRouter02 (no deadline).
+  //
+  //  Arbitrum (42161)  ROUTER_KIND=0  SWAP_ROUTER=0xE592427A0AEce92De3Edee1F18E0157C05861564 (original)
+  //                    USDC=0xaf88d065e77c8cC2239327C5EDb3A432268e5831  WETH=0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+  //                    PYTH=0xff1a0f4744e8582DF1aE09D5611b887B6a12925C  FEED(ETH/USD)=0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace  (pool fee 500)
+  //  Base (8453)       ROUTER_KIND=1  SWAP_ROUTER=0x2626664c2603336E57B271c5C0b26F421741e481 (SwapRouter02; no original on Base)
+  //                    USDC=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  WETH=0x4200000000000000000000000000000000000006
+  //                    PYTH=0xbC16aee60f64864882BC6C4E428e148Fc0E272F5 (upgraded)  FEED(ETH/USD)=same as Arbitrum
+  //  Avalanche (43114) ROUTER_KIND=1  SWAP_ROUTER=0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE (SwapRouter02; no original)
+  //                    USDC=0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E  WAVAX=0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7
+  //                    PYTH=0x4305FB66699C3B2702D4d05CF36551390A4c69C6  FEED(AVAX/USD)=0x93da3352f9f1d105fdfe4971cfa80e9dd777bfc5d0f683ebb6e1294b92137bb7
+  //  Mantle (5000)     ROUTER_KIND=0  SWAP_ROUTER=0x319B69888b0d11cEC22caA5034e25FfFBDc88421 (Agni; Uni V3 fork, has deadline)
+  //                    USDC=0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9 (bridged)  WMNT=0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8
+  //                    PYTH=0xA2aa501b19aff244D90cc15a4Cf739D2725B5729  FEED(MNT/USD)=0x4e3037c822d852d79af3ac80e35eb420ee3b870dca49f9344a38ef4773fb0585
   const swapRouter = req("SWAP_ROUTER");
-  const usdc = req("USDC");              // native USDC (Circle)
+  const usdc = req("USDC");              // native/canonical USDC
   const weth = req("WETH");              // wrapped native (tokenIn)
   const pyth = req("PYTH");              // Pyth contract on this chain
   const feedId = req("PYTH_FEED_ID");    // tokenIn/USD feed id
   const maxAge = process.env.PYTH_MAX_AGE ?? "60";
+  const routerKind = Number(process.env.ROUTER_KIND ?? "0");
 
   const oracle = await (await ethers.getContractFactory("PythPriceOracle"))
     .deploy(pyth, feedId, maxAge);
@@ -76,6 +88,13 @@ async function deployReal(deployer: { address: string }, agent: string) {
   await vault.waitForDeployment();
   const vaultAddr = await vault.getAddress();
   console.log("StrategyVault:  ", vaultAddr);
+
+  if (routerKind === 1) {
+    await (await vault.setRouterKind(1)).wait();
+    console.log("routerKind set to 1 (SwapRouter02, no deadline)");
+  } else {
+    console.log("routerKind 0 (original SwapRouter, with deadline)");
+  }
   console.log("USDC (tokenOut):", usdc);
   console.log("NOTE: fund the agent EOA with gas; PythPriceOracle.updatePrice is permissionless (no setUpdater needed).");
   return vaultAddr;
