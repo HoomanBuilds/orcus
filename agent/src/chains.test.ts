@@ -66,4 +66,26 @@ describe("resolveChain", () => {
     delete process.env.ARBITRUM_SEPOLIA_USDC;
     expect(() => resolveChain()).toThrow(/settlement token/);
   });
+
+  it("falls back to shared ZG creds when no per-chain override is set", () => {
+    process.env.CHAIN = "galileo";
+    delete process.env.GALILEO_ZG_SERVICE_URL;
+    delete process.env.GALILEO_ZG_API_SECRET;
+    process.env.ZG_SERVICE_URL = "https://shared.tee.example";
+    process.env.ZG_API_SECRET = "shared-secret";
+    const cfg = resolveChain();
+    expect(cfg.zgServiceUrl).toBe("https://shared.tee.example");
+    expect(cfg.zgApiSecret).toBe("shared-secret");
+  });
+
+  it("uses per-chain ZG creds when set, overriding the shared fallback", () => {
+    process.env.CHAIN = "galileo";
+    process.env.GALILEO_ZG_SERVICE_URL = "https://galileo.tee.example";
+    process.env.GALILEO_ZG_API_SECRET = "galileo-secret";
+    process.env.ZG_SERVICE_URL = "https://shared.tee.example";
+    process.env.ZG_API_SECRET = "shared-secret";
+    const cfg = resolveChain();
+    expect(cfg.zgServiceUrl).toBe("https://galileo.tee.example");
+    expect(cfg.zgApiSecret).toBe("galileo-secret");
+  });
 });

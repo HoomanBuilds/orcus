@@ -10,6 +10,4 @@ export const env = {
   agentPk:        required("AGENT_PRIVATE_KEY"),
   agentEciesSk:   required("AGENT_ECIES_PRIVATE_KEY"),
   storageIndexer: required("STORAGE_INDEXER"),
-  zgServiceUrl:   required("ZG_SERVICE_URL"),
-  zgApiSecret:    required("ZG_API_SECRET"),
 };

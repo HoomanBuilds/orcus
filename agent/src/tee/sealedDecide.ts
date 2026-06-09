@@ -3,13 +3,11 @@ export type Decision =
   | { action: "EXECUTE"; reason: string; tradeParams: Record<string, unknown> };
 
 export async function sealedDecide(
-  _broker: unknown,
-  _provider: string,
+  serviceUrl: string,
+  apiSecret: string,
   intentJson: string,
   market: string,
 ): Promise<Decision> {
-  const serviceUrl = process.env.ZG_SERVICE_URL;
-  const apiSecret  = process.env.ZG_API_SECRET;
   if (!serviceUrl || !apiSecret) throw new Error("ZG_SERVICE_URL and ZG_API_SECRET must be set");
 
   const userContent =

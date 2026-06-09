@@ -17,6 +17,8 @@ export interface ChainConfig {
   explorerTx: string;
   lookbackBlocks: number;
   pollIntervalMs: number;
+  zgServiceUrl: string;
+  zgApiSecret: string;
 }
 
 interface ChainMeta {
@@ -34,6 +36,8 @@ interface ChainMeta {
   rpcDefault: string;
   vaultEnv: string;
   usdcEnv: string;
+  zgUrlEnv: string;
+  zgSecretEnv: string;
 }
 
 // TESTNET deployments. Every chain runs the self-contained MOCK stack (deploy DEPLOY_MODE=mock):
@@ -56,6 +60,8 @@ const META: Record<string, ChainMeta> = {
     rpcDefault: "https://evmrpc-testnet.0g.ai",
     vaultEnv: "VAULT_ADDRESS",
     usdcEnv: "USDC_ADDRESS",
+    zgUrlEnv: "GALILEO_ZG_SERVICE_URL",
+    zgSecretEnv: "GALILEO_ZG_API_SECRET",
   },
   "arbitrum-sepolia": {
     key: "arbitrum-sepolia",
@@ -72,6 +78,8 @@ const META: Record<string, ChainMeta> = {
     rpcDefault: "https://sepolia-rollup.arbitrum.io/rpc",
     vaultEnv: "ARBITRUM_SEPOLIA_VAULT",
     usdcEnv: "ARBITRUM_SEPOLIA_USDC",
+    zgUrlEnv: "ARBITRUM_SEPOLIA_ZG_SERVICE_URL",
+    zgSecretEnv: "ARBITRUM_SEPOLIA_ZG_API_SECRET",
   },
   "base-sepolia": {
     key: "base-sepolia",
@@ -88,6 +96,8 @@ const META: Record<string, ChainMeta> = {
     rpcDefault: "https://sepolia.base.org",
     vaultEnv: "BASE_SEPOLIA_VAULT",
     usdcEnv: "BASE_SEPOLIA_USDC",
+    zgUrlEnv: "BASE_SEPOLIA_ZG_SERVICE_URL",
+    zgSecretEnv: "BASE_SEPOLIA_ZG_API_SECRET",
   },
   "avalanche-fuji": {
     key: "avalanche-fuji",
@@ -104,6 +114,8 @@ const META: Record<string, ChainMeta> = {
     rpcDefault: "https://api.avax-test.network/ext/bc/C/rpc",
     vaultEnv: "FUJI_VAULT",
     usdcEnv: "FUJI_USDC",
+    zgUrlEnv: "FUJI_ZG_SERVICE_URL",
+    zgSecretEnv: "FUJI_ZG_API_SECRET",
   },
   "mantle-sepolia": {
     key: "mantle-sepolia",
@@ -120,6 +132,8 @@ const META: Record<string, ChainMeta> = {
     rpcDefault: "https://rpc.sepolia.mantle.xyz",
     vaultEnv: "MANTLE_SEPOLIA_VAULT",
     usdcEnv: "MANTLE_SEPOLIA_USDC",
+    zgUrlEnv: "MANTLE_SEPOLIA_ZG_SERVICE_URL",
+    zgSecretEnv: "MANTLE_SEPOLIA_ZG_API_SECRET",
   },
 };
 
@@ -140,10 +154,13 @@ export function resolveChain(): ChainConfig {
   if (!usdc) {
     throw new Error(`CHAIN="${key}" has no settlement token. Set ${m.usdcEnv} to the deployed oUSDC in .env.`);
   }
+  const zgServiceUrl = process.env[m.zgUrlEnv] ?? process.env.ZG_SERVICE_URL ?? "";
+  const zgApiSecret  = process.env[m.zgSecretEnv] ?? process.env.ZG_API_SECRET ?? "";
   return {
     key: m.key, name: m.name, chainId: m.chainId, rpc, vault, usdc,
     poolFee: m.poolFee, priceMode: m.priceMode,
     binanceSymbol: m.binanceSymbol, coingeckoId: m.coingeckoId,
     explorerTx: m.explorerTx, lookbackBlocks: m.lookbackBlocks, pollIntervalMs: m.pollIntervalMs,
+    zgServiceUrl, zgApiSecret,
   };
 }
