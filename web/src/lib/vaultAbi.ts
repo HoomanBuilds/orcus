@@ -288,6 +288,19 @@ export const vaultAbi = [
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "kind",
+        "type": "uint8"
+      }
+    ],
+    "name": "RouterKindUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "address",
         "name": "oldRouter",
@@ -731,6 +744,19 @@ export const vaultAbi = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "routerKind",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -772,6 +798,19 @@ export const vaultAbi = [
   {
     "inputs": [
       {
+        "internalType": "uint8",
+        "name": "_kind",
+        "type": "uint8"
+      }
+    ],
+    "name": "setRouterKind",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "_new",
         "type": "address"
@@ -787,7 +826,7 @@ export const vaultAbi = [
     "name": "swapRouter",
     "outputs": [
       {
-        "internalType": "contract ISwapRouter",
+        "internalType": "address",
         "name": "",
         "type": "address"
       }
