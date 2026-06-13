@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { galileo } from "@/lib/chain";
+import { ChainSelector } from "./chain-selector";
+import { OrcusConnectButton } from "./connect-button";
 
 const NAV_LINKS = [
   { label: "Protocol", href: "#platform" },
@@ -17,55 +17,6 @@ const NAV_STYLE: React.CSSProperties = {
   background: "rgba(245,244,240,0.30)",
   boxShadow: "0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06)",
 };
-
-// Custom wallet button that matches the navbar pill style
-function WalletButton() {
-  return (
-    <ConnectButton.Custom>
-      {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
-        if (!mounted) return null;
-
-        if (!account) {
-          return (
-            <button
-              onClick={openConnectModal}
-              type="button"
-              className="inline-flex items-center justify-center text-[11px] px-4 py-2 rounded-xl border border-black/10 bg-[#111] text-white hover:bg-[#333] transition-all duration-200 tracking-widest font-medium"
-            >
-              CONNECT
-            </button>
-          );
-        }
-
-        if (chain && chain.id !== galileo.id) {
-          return (
-            <button
-              onClick={openChainModal}
-              type="button"
-              className="inline-flex items-center gap-1.5 text-[11px] px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-200 tracking-wide"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-              Wrong network
-            </button>
-          );
-        }
-
-        return (
-          <button
-            onClick={openAccountModal}
-            type="button"
-            className="inline-flex items-center gap-2 text-[11px] px-4 py-2 rounded-xl border border-black/10 bg-white hover:bg-black/[0.03] transition-all duration-200 tracking-wide"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="text-black/70 font-medium" style={{ fontFamily: "var(--font-data)" }}>
-              {account.displayName}
-            </span>
-          </button>
-        );
-      }}
-    </ConnectButton.Custom>
-  );
-}
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
@@ -120,8 +71,9 @@ export function Navbar() {
               </Link>
             </div>
 
-            {/* Wallet button */}
-            <WalletButton />
+            {/* Chain selector + VM-aware wallet button */}
+            <ChainSelector />
+            <OrcusConnectButton />
           </div>
 
           {/* Mobile hamburger */}
@@ -168,9 +120,10 @@ export function Navbar() {
                 DASHBOARD
               </Link>
             </div>
-            {/* Mobile connect button */}
-            <div className="mt-1 px-2 pb-1">
-              <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
+            {/* Mobile chain selector + connect */}
+            <div className="mt-1 px-2 pb-1 flex items-center gap-2">
+              <ChainSelector />
+              <OrcusConnectButton />
             </div>
           </div>
         </div>
