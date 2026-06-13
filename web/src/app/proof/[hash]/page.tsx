@@ -10,7 +10,8 @@ export default async function ProofViewer({ params }: Props) {
   const { hash } = await params;
   const receipt = await fetchReceipt(hash);
   const storageScanUrl = "https://storagescan-galileo.0g.ai/submissions";
-  const chainScanUrl = `https://chainscan-galileo.0g.ai/address/0xc624fFC2c9069a53e0D62CF5172fB10aDDA2D205`;
+  const vaultAddress = process.env.NEXT_PUBLIC_VAULT_ADDRESS ?? "";
+  const chainScanUrl = `https://chainscan-galileo.0g.ai/address/${vaultAddress}`;
 
   return (
     <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
