@@ -3,19 +3,17 @@ import {
   NetworkArbitrumSepolia,
   NetworkBaseSepolia,
   NetworkAvalancheFuji,
-  NetworkMantleSepolia,
   NetworkSui,
 } from "@web3icons/react";
 import { chainByKey, type ChainMeta } from "@/lib/chains";
 
 type IconCmp = React.ComponentType<{ size?: number; variant?: "mono" | "branded" | "background"; className?: string }>;
 
-// 0G Galileo has no web3icons entry -> letter-badge fallback.
+// 0G Galileo + Mantle Sepolia have no usable (visible) branded web3icon -> letter-badge fallback.
 const ICONS: Record<string, IconCmp> = {
   "arbitrum-sepolia": NetworkArbitrumSepolia,
   "base-sepolia": NetworkBaseSepolia,
   "avalanche-fuji": NetworkAvalancheFuji,
-  "mantle-sepolia": NetworkMantleSepolia,
   "sui": NetworkSui,
 };
 
