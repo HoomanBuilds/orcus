@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { fetchReceipt } from "@/lib/receipt";
+import { ReceiptViewer } from "@/components/receipt-viewer";
 
 interface Props {
   params: Promise<{ hash: string }>;
@@ -6,6 +8,7 @@ interface Props {
 
 export default async function ProofViewer({ params }: Props) {
   const { hash } = await params;
+  const receipt = await fetchReceipt(hash);
   const storageScanUrl = "https://storagescan-galileo.0g.ai/submissions";
   const chainScanUrl = `https://chainscan-galileo.0g.ai/address/0xc624fFC2c9069a53e0D62CF5172fB10aDDA2D205`;
 
@@ -32,6 +35,20 @@ export default async function ProofViewer({ params }: Props) {
               This merkle root anchors the TEE decision receipt on 0G Storage. The full JSON receipt is permanently stored and verifiable.
             </p>
           </div>
+
+          {/* Decoded receipt (fetched from 0G Storage by root) */}
+          {receipt ? (
+            <ReceiptViewer receipt={receipt} />
+          ) : (
+            <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
+              <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>
+                Receipt
+              </p>
+              <p className="text-sm text-black/45 leading-relaxed">
+                Not yet retrievable from 0G Storage — it may still be propagating across storage nodes, or this root predates the current deployment. The merkle root above is the on-chain proof; the full JSON renders here once the file is indexed.
+              </p>
+            </div>
+          )}
 
           {/* Links */}
           <div className="grid grid-cols-2 gap-3">
