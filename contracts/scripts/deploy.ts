@@ -100,6 +100,41 @@ async function deployReal(deployer: { address: string }, agent: string) {
   return vaultAddr;
 }
 
+// realpush: a real external Uniswap V3 DEX (existing liquid pool) + our push oracle,
+// settling in the chain's REAL token. For Sepolia (addresses in .env.example).
+async function deployRealPush(deployer: { address: string }, agent: string) {
+  const swapRouter = req("SWAP_ROUTER");
+  const weth = req("WETH");            // wrapped native (tokenIn); vault wraps deposits into it
+  const usdc = req("USDC");            // real settlement token (tokenOut); external, not deployed
+  const routerKind = Number(process.env.ROUTER_KIND ?? "1");
+
+  const oracle = await (await ethers.getContractFactory("OrcusOracle"))
+    .deploy(deployer.address, deployer.address, 0);
+  await oracle.waitForDeployment();
+  console.log("OrcusOracle:  ", await oracle.getAddress());
+
+  const vault = await (await ethers.getContractFactory("StrategyVault")).deploy(
+    agent, agent, swapRouter, await oracle.getAddress(), weth, deployer.address,
+  );
+  await vault.waitForDeployment();
+  const vaultAddr = await vault.getAddress();
+  console.log("StrategyVault:", vaultAddr);
+
+  if (routerKind === 1) {
+    await (await vault.setRouterKind(1)).wait();
+    console.log("routerKind set to 1 (SwapRouter02, no deadline)");
+  } else {
+    console.log("routerKind 0 (original SwapRouter, with deadline)");
+  }
+  await (await oracle.setUpdater(vaultAddr)).wait();
+  console.log("Oracle updater set to vault");
+  console.log("SWAP_ROUTER:   ", swapRouter);
+  console.log("WETH (tokenIn):", weth);
+  console.log("USDC (tokenOut):", usdc);
+  console.log("NOTE: fund the agent EOA with gas; the existing Uniswap pool provides liquidity (no minting).");
+  return vaultAddr;
+}
+
 async function main() {
   const agent = req("AGENT_ADDRESS");
   const [deployer] = await ethers.getSigners();
@@ -109,6 +144,8 @@ async function main() {
 
   const vaultAddr = mode === "real"
     ? await deployReal(deployer, agent)
+    : mode === "realpush"
+    ? await deployRealPush(deployer, agent)
     : await deployMock(deployer, agent);
 
   console.log("Explorer:", `https://chainscan-galileo.0g.ai/address/${vaultAddr}`);
