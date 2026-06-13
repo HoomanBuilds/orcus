@@ -1,15 +1,18 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther, formatEther } from "viem";
+import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { useCurrentAccount, useSuiClient, useSignAndExecuteTransaction, ConnectButton as SuiConnectButton } from "@mysten/dapp-kit";
+import { useQuery } from "@tanstack/react-query";
+import { parseUnits, formatUnits } from "viem";
 import { useRouter } from "next/navigation";
 import { encryptIntentBrowser } from "@/lib/encrypt";
 import { vaultAbi } from "@/lib/vaultAbi";
-import { VAULT } from "@/lib/vaultEvents";
-import { SWAP_TARGETS, DEFAULT_TOKEN_OUT, type SwapTargetSymbol } from "@/lib/tokens";
+import { useActiveChain } from "@/lib/active-chain";
+import { suiDepositTx, fetchSuiIntent } from "@/lib/sui";
+import { ChainIcon } from "@/components/chain-icon";
 import { useToast } from "@/components/toast";
-import Link from "next/link";
 import { WalletConnectPrompt } from "@/components/wallet-gate";
+import Link from "next/link";
 
 const AGENT_PUB = process.env.NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY || "";
 
@@ -42,58 +45,83 @@ function Tag({ children }: { children: React.ReactNode }) {
 }
 
 export default function StrategyPage() {
-  const { address } = useAccount();
+  const { activeChain } = useActiveChain();
+  const isSui = activeChain.vm === "sui";
   const router = useRouter();
   const { toast } = useToast();
+
+  const { address: evmAddress } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const suiAccount = useCurrentAccount();
+  const suiClient = useSuiClient();
+  const { mutateAsync: suiSignExec } = useSignAndExecuteTransaction();
 
-  const [goal, setGoal]         = useState("");
-  const [tokenOut, setTokenOut] = useState<SwapTargetSymbol>(DEFAULT_TOKEN_OUT);
-  const [amount, setAmount]     = useState("0.01");
+  const address = isSui ? suiAccount?.address : evmAddress;
+  const dec = activeChain.nativeDecimals;
+  const sym = activeChain.nativeSymbol;
+
+  const [goal, setGoal] = useState("");
+  const [amount, setAmount] = useState("0.01");
   const [slippage, setSlippage] = useState(0);
-  const [phase, setPhase]       = useState<Phase>("idle");
-  const [cipher, setCipher]     = useState<string | null>(null);
-  const [txHash, setTxHash]     = useState<string | null>(null);
-  const [errMsg, setErrMsg]     = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [cipher, setCipher] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  const { data: intentData } = useReadContract({
-    abi: vaultAbi, address: VAULT, functionName: "intents",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!VAULT, refetchInterval: 10_000 },
+  // Reset transient state when the active chain changes.
+  useEffect(() => { setPhase("idle"); setTxHash(null); setErrMsg(null); setCipher(null); }, [activeChain.key]);
+
+  const { data: evmIntent } = useReadContract({
+    abi: vaultAbi, address: activeChain.vault as `0x${string}`, functionName: "intents",
+    args: evmAddress ? [evmAddress] : undefined,
+    chainId: activeChain.evmChainId,
+    query: { enabled: !isSui && !!evmAddress && !!activeChain.evmChainId, refetchInterval: 10_000 },
   });
-  const balance = (intentData?.[2] ?? 0n) as bigint;
-  const intent = intentData;
 
-  const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: txHash as `0x${string}` | undefined });
+  const { data: suiIntent } = useQuery({
+    queryKey: ["sui-intent", activeChain.key, suiAccount?.address],
+    queryFn: () => fetchSuiIntent(suiClient, activeChain, suiAccount!.address),
+    enabled: isSui && !!suiAccount?.address,
+    refetchInterval: 10_000,
+  });
+
+  const balance = isSui ? (suiIntent?.amountMist ?? 0n) : ((evmIntent?.[2] ?? 0n) as bigint);
+  const hasActive = isSui ? (suiIntent?.active ?? false) : (evmIntent?.[4] === true);
+  const slippageDisplay = !isSui && hasActive && evmIntent ? `${evmIntent[3].toString()} bps` : "—";
 
   useEffect(() => {
-    if (txConfirmed && txHash) {
+    if (phase === "done" && txHash) {
       toast({ type: "success", title: "Intent submitted", description: "TEE agent will pick it up shortly", txHash });
       router.push("/dashboard?intent=submitted");
     }
-  }, [txConfirmed, txHash, toast, router]);
+  }, [phase, txHash, toast, router]);
 
-  const hasActive = intent?.[4] === true;
   const amountValid = !!amount && !isNaN(+amount) && +amount > 0;
-  const canSubmit = !!address && !!VAULT && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid;
+  const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid;
 
   async function submit() {
     if (!canSubmit) return;
     setErrMsg(null);
     try {
       setPhase("encrypting");
-      const ciphertext = encryptIntentBrowser(AGENT_PUB, { goal, tokenOut, ts: Date.now() });
+      const ciphertext = encryptIntentBrowser(AGENT_PUB, { goal, ts: Date.now() });
       setCipher(ciphertext.slice(0, 96) + "...");
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 350));
       setCipher(null);
       setPhase("submitting");
-      const hash = await writeContractAsync({
-        abi: vaultAbi, address: VAULT,
-        functionName: "depositNative",
-        args: [ciphertext, Number(slippage)],
-        value: parseEther(amount),
-      });
-      setTxHash(hash);
+      const amt = parseUnits(amount, dec);
+      if (isSui) {
+        const tx = suiDepositTx(activeChain, ciphertext, Number(slippage), amt);
+        const res = await suiSignExec({ transaction: tx });
+        setTxHash(res.digest);
+      } else {
+        const hash = await writeContractAsync({
+          abi: vaultAbi, address: activeChain.vault as `0x${string}`,
+          functionName: "depositNative", args: [ciphertext, Number(slippage)],
+          value: amt, chainId: activeChain.evmChainId,
+        });
+        setTxHash(hash);
+      }
       setPhase("done");
     } catch (e) {
       setCipher(null);
@@ -104,20 +132,35 @@ export default function StrategyPage() {
 
   const submitLabel = () => {
     if (!address)               return "Connect wallet first";
-    if (hasActive)              return "Active intent — withdraw from vault first";
+    if (hasActive)              return "Active intent — withdraw first";
     if (phase === "encrypting") return "Encrypting intent…";
     if (phase === "submitting") return "Confirm in wallet…";
     if (phase === "done")       return "Intent submitted ✓";
-    return `Encrypt & submit  ↗  OG → ${tokenOut}`;
+    return `Encrypt & submit  ↗  ${sym} → oUSDC`;
   };
 
   const STEPS = [
-    { n: "01", label: "ENCRYPT",  desc: "ECIES-256 in-browser",   done: phase !== "idle" },
-    { n: "02", label: "SUBMIT",   desc: "On-chain sealed intent",  done: phase === "submitting" || phase === "done" || phase === "error" },
-    { n: "03", label: "EXECUTE",  desc: "Intel TDX → Jaine DEX",  done: phase === "done" },
+    { n: "01", label: "ENCRYPT",  desc: "ECIES-256 in-browser",       done: phase !== "idle" },
+    { n: "02", label: "SUBMIT",   desc: `Sealed intent on ${activeChain.shortLabel}`, done: phase === "submitting" || phase === "done" || phase === "error" },
+    { n: "03", label: "EXECUTE",  desc: "Intel TDX → Orcus router",   done: phase === "done" },
   ];
 
-  if (!address) return <WalletConnectPrompt page="strategy" />;
+  if (!address) {
+    if (!isSui) return <WalletConnectPrompt page="strategy" />;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: "#F5F4F0", paddingTop: 88 }}>
+        <div className="max-w-sm w-full text-center flex flex-col items-center gap-6">
+          <ChainIcon chain={activeChain} size={48} />
+          <div>
+            <p className="text-[10px] tracking-[0.25em] text-black/30 uppercase mb-1" style={{ fontFamily: "var(--font-data)" }}>ORCUS / STRATEGY · SUI</p>
+            <h1 className="text-2xl font-light text-[#111] tracking-tight">Connect your Sui wallet</h1>
+            <p className="text-sm text-black/40 leading-relaxed mt-3">Connect a Sui wallet to encrypt and submit a sealed intent on Sui.</p>
+          </div>
+          <SuiConnectButton connectText="Connect Sui wallet" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
@@ -127,18 +170,24 @@ export default function StrategyPage() {
           {/* Header */}
           <div>
             <p className="text-[11px] tracking-[0.16em] text-black/30" style={{ fontFamily: "var(--font-data)" }}>ORCUS / STRATEGY</p>
-            <div className="flex items-end gap-5 mt-2">
+            <div className="flex items-end gap-5 mt-2 flex-wrap">
               <h1 className="text-4xl font-light tracking-tight text-[#111]">Strategy terminal</h1>
-              <div className="flex items-center gap-1.5 mb-1 px-3 py-1 rounded-full border border-[#16a34a]/20 bg-[#16a34a]/05">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a] animate-[dot-pulse_2s_ease-in-out_infinite]" />
-                <span className="text-[11px] text-[#16a34a]">TEE sealed</span>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-black/[0.08] bg-white">
+                  <ChainIcon chain={activeChain} size={14} />
+                  <span className="text-[11px] text-black/55">{activeChain.name}</span>
+                </span>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#16a34a]/20 bg-[#16a34a]/05">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a] animate-[dot-pulse_2s_ease-in-out_infinite]" />
+                  <span className="text-[11px] text-[#16a34a]">TEE sealed</span>
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Encryption flow steps */}
+          {/* Steps */}
           <div className="grid grid-cols-3 gap-3">
-            {STEPS.map((step, i) => (
+            {STEPS.map((step) => (
               <Card key={step.n} className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] text-black/20 tracking-widest" style={{ fontFamily: "var(--font-data)" }}>{step.n}</span>
@@ -150,220 +199,120 @@ export default function StrategyPage() {
             ))}
           </div>
 
-          {/* Image banner */}
+          {/* Banner */}
           <Card className="relative overflow-hidden min-h-[120px] flex items-end">
-            <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/analyst-Ysxnqg7Fpy2cfA56PiIttv1KximMhT.png"
-              alt=""
-              aria-hidden="true"
+            <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/analyst-Ysxnqg7Fpy2cfA56PiIttv1KximMhT.png" alt="" aria-hidden="true"
               className="absolute inset-0 w-full h-full object-cover object-center"
-              style={{
-                maskImage: "linear-gradient(to bottom, black 0%, black 50%, transparent 100%)",
-                WebkitMaskImage: "linear-gradient(to bottom, black 0%, black 50%, transparent 100%)",
-              }}
-            />
-            <div className="absolute inset-0" style={{
-              background: "linear-gradient(to right, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 50%, transparent 100%)"
-            }} />
+              style={{ maskImage: "linear-gradient(to bottom, black 0%, black 50%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 0%, black 50%, transparent 100%)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 50%, transparent 100%)" }} />
             <div className="relative z-10 p-8">
               <Tag>DARK POOL</Tag>
-              <h2 className="mt-3 text-2xl font-light text-[#111] leading-tight">
-                Your intent is invisible to validators<br />until settlement is final.
-              </h2>
+              <h2 className="mt-3 text-2xl font-light text-[#111] leading-tight">Your intent is invisible to validators<br />until settlement is final.</h2>
             </div>
           </Card>
 
-          {/* Main 2-col layout */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-
-            {/* Left: position + recent */}
+            {/* Left: position */}
             <div className="lg:col-span-2 flex flex-col gap-5">
-
-              {/* Position */}
               <Card>
                 <div className="px-5 py-3 border-b border-black/[0.05] flex items-center justify-between">
                   <p className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Your position</p>
-                  {address && <span className="text-[11px] text-black/25" style={{ fontFamily: "var(--font-data)" }}>{address.slice(0, 6)}…{address.slice(-4)}</span>}
+                  <span className="text-[11px] text-black/25" style={{ fontFamily: "var(--font-data)" }}>{address.slice(0, 6)}…{address.slice(-4)}</span>
                 </div>
-
-                {!address ? (
-                  <div className="px-5 py-8 text-center">
-                    <p className="text-sm text-black/30">Connect wallet to view</p>
+                <div className="px-5 py-5 border-b border-black/[0.05]">
+                  <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>Vault balance</p>
+                  <p className="text-3xl font-light tracking-tight text-[#111]" style={{ fontFamily: "var(--font-data)", fontVariantNumeric: "tabular-nums" }}>
+                    {(+formatUnits(balance, dec)).toFixed(4)}
+                    <span className="text-xl text-black/30 ml-2">{sym}</span>
+                  </p>
+                </div>
+                {[
+                  { label: "Intent", value: hasActive ? "Active" : "None", green: hasActive },
+                  { label: "Slippage", value: slippageDisplay },
+                ].map((f) => (
+                  <div key={f.label} className="px-5 py-3 flex items-center justify-between border-b border-black/[0.04]">
+                    <span className="text-sm text-black/40">{f.label}</span>
+                    <span className={`text-sm font-medium ${f.green ? "text-[#16a34a]" : "text-[#111]"}`} style={{ fontFamily: "var(--font-data)" }}>{f.value}</span>
                   </div>
-                ) : (
-                  <>
-                    <div className="px-5 py-5 border-b border-black/[0.05]">
-                      <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>Vault balance</p>
-                      <p className="text-3xl font-light tracking-tight text-[#111]" style={{ fontFamily: "var(--font-data)", fontVariantNumeric: "tabular-nums" }}>
-                        {balance !== undefined ? `${(+formatEther(balance)).toFixed(4)}` : "…"}
-                        <span className="text-xl text-black/30 ml-2">OG</span>
-                      </p>
-                    </div>
-                    {[
-                      { label: "Intent", value: hasActive ? "Active" : "None", green: hasActive },
-                      { label: "Slippage", value: hasActive && intent ? `${intent[3].toString()} bps` : "—" },
-                    ].map((f) => (
-                      <div key={f.label} className="px-5 py-3 flex items-center justify-between border-b border-black/[0.04]">
-                        <span className="text-sm text-black/40">{f.label}</span>
-                        <span className={`text-sm font-medium ${f.green ? "text-[#16a34a]" : "text-[#111]"}`}
-                          style={{ fontFamily: "var(--font-data)" }}>
-                          {f.value}
-                        </span>
-                      </div>
-                    ))}
-                    {hasActive && (
-                      <div className="px-5 py-3 bg-amber-50/50 border-t border-amber-100">
-                        <p className="text-[11px] text-amber-700">Intent active — withdraw to set a new one</p>
-                      </div>
-                    )}
-                  </>
+                ))}
+                {hasActive && (
+                  <div className="px-5 py-3 bg-amber-50/50 border-t border-amber-100">
+                    <p className="text-[11px] text-amber-700">Intent active — withdraw to set a new one</p>
+                  </div>
                 )}
               </Card>
-
-              {/* Link to dashboard */}
               <Card className="flex-1 flex items-center justify-center p-8">
-                <Link href="/dashboard" className="text-sm text-black/40 hover:text-black/70 transition-colors">
-                  View executions on Dashboard →
-                </Link>
+                <Link href="/dashboard" className="text-sm text-black/40 hover:text-black/70 transition-colors">View executions on Dashboard →</Link>
               </Card>
             </div>
 
-            {/* Right: trade form */}
+            {/* Right: form */}
             <Card className="lg:col-span-3" style={{ boxShadow: "0 0 0 1px rgba(0,0,0,0.03), 0 8px 32px rgba(0,0,0,0.06)" }}>
               <div className="px-5 py-3 border-b border-black/[0.05]">
                 <p className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Intent configuration</p>
               </div>
-
               <div className="p-6 flex flex-col gap-6">
-
-                {/* Goal textarea */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>
-                    Strategy goal
-                  </label>
+                  <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Strategy goal</label>
                   {cipher ? (
-                    <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4 text-[12px] min-h-[90px] leading-relaxed break-all"
-                      style={{ fontFamily: "var(--font-data)", color: "#111" }}>
-                      {cipher}
-                    </div>
+                    <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4 text-[12px] min-h-[90px] leading-relaxed break-all" style={{ fontFamily: "var(--font-data)", color: "#111" }}>{cipher}</div>
                   ) : (
-                    <textarea
-                      rows={4}
-                      value={goal}
-                      onChange={(e) => setGoal(e.target.value)}
-                      placeholder="e.g. swap when OG dips below the 1h moving average and momentum is positive"
+                    <textarea rows={4} value={goal} onChange={(e) => setGoal(e.target.value)}
+                      placeholder={`e.g. swap when ${sym} dips below the 1h moving average and momentum is positive`}
                       className="w-full rounded-xl border border-black/10 bg-white p-4 text-[13px] leading-relaxed resize-none outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
-                      style={{ fontFamily: "inherit", color: "#111" }}
-                    />
+                      style={{ fontFamily: "inherit", color: "#111" }} />
                   )}
                   <p className="text-[11px] text-black/25">ECIES-256 encrypted in-browser. Only the TEE can read this.</p>
                 </div>
 
-                {/* Token selector */}
-                <div className="flex flex-col gap-3">
-                  <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>
-                    Swap OG to
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {SWAP_TARGETS.map((t) => {
-                      const active = tokenOut === t.symbol;
-                      return (
-                        <button key={t.symbol} onClick={() => setTokenOut(t.symbol)}
-                          className="text-left rounded-xl border p-3 transition-all"
-                          style={{
-                            border: active ? "1px solid rgba(0,0,0,0.25)" : "1px solid rgba(0,0,0,0.07)",
-                            background: active ? "rgba(0,0,0,0.04)" : "white",
-                            cursor: "pointer",
-                          }}>
-                          <p className="text-[13px] font-medium text-[#111]">{t.symbol}</p>
-                          <p className="text-[10px] text-black/30 mt-0.5 truncate">{t.label}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                {/* Settlement note (agent settles in the chain's oUSDC) */}
+                <div className="flex items-center gap-2.5 rounded-xl border border-black/[0.07] bg-black/[0.015] px-4 py-3">
+                  <ChainIcon chain={activeChain} size={18} />
+                  <p className="text-[12px] text-black/55">Deposits {sym}; the sealed agent settles into <span className="text-black/80 font-medium">oUSDC</span> on {activeChain.name}.</p>
                 </div>
 
-                {/* Amount + slippage */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Amount (OG)</label>
+                    <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Amount ({sym})</label>
                     <input value={amount} onChange={(e) => setAmount(e.target.value)}
                       className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-[13px] outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
-                      style={{ fontFamily: "var(--font-data)", color: "#111", fontVariantNumeric: "tabular-nums" }}
-                    />
+                      style={{ fontFamily: "var(--font-data)", color: "#111", fontVariantNumeric: "tabular-nums" }} />
                   </div>
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Slippage (bps)</label>
                     <input type="number" value={slippage} onChange={(e) => setSlippage(Number(e.target.value))}
                       className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-[13px] outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
-                      style={{ fontFamily: "var(--font-data)", color: "#111", fontVariantNumeric: "tabular-nums" }}
-                    />
+                      style={{ fontFamily: "var(--font-data)", color: "#111", fontVariantNumeric: "tabular-nums" }} />
                   </div>
                 </div>
 
-                {/* Submit */}
-                <button
-                  disabled={!canSubmit}
-                  onClick={submit}
+                <button disabled={!canSubmit} onClick={submit}
                   className="w-full py-4 rounded-xl text-[13px] font-medium tracking-wide transition-all"
-                  style={{
-                    background: canSubmit ? "#111" : "rgba(0,0,0,0.04)",
-                    color: canSubmit ? "#fff" : "rgba(0,0,0,0.25)",
-                    border: canSubmit ? "none" : "1px solid rgba(0,0,0,0.07)",
-                    cursor: canSubmit ? "pointer" : "not-allowed",
-                    opacity: phase === "submitting" || phase === "encrypting" ? 0.7 : 1,
-                    letterSpacing: "0.04em",
-                  }}>
+                  style={{ background: canSubmit ? "#111" : "rgba(0,0,0,0.04)", color: canSubmit ? "#fff" : "rgba(0,0,0,0.25)",
+                    border: canSubmit ? "none" : "1px solid rgba(0,0,0,0.07)", cursor: canSubmit ? "pointer" : "not-allowed",
+                    opacity: phase === "submitting" || phase === "encrypting" ? 0.7 : 1, letterSpacing: "0.04em" }}>
                   {submitLabel()}
                 </button>
 
-                {/* Status messages */}
                 {phase === "done" && txHash && (
                   <div className="rounded-xl border border-[#16a34a]/20 bg-[#16a34a]/[0.04] p-4 text-[12px] text-[#16a34a] leading-relaxed">
-                    Intent submitted.{txConfirmed && " Confirmed. TEE agent will pick it up shortly. "}
-                    <a href={`https://chainscan-galileo.0g.ai/tx/${txHash}`} target="_blank" rel="noreferrer"
-                      className="underline ml-1">View tx ↗</a>
+                    Intent submitted. TEE agent will pick it up shortly.
+                    <a href={`${activeChain.explorerTx}${txHash}`} target="_blank" rel="noreferrer" className="underline ml-1">View tx ↗</a>
                   </div>
                 )}
                 {phase === "error" && errMsg && (
-                  <div className="rounded-xl border border-red-200 bg-red-50/50 p-4 text-[12px] text-red-600 leading-relaxed">
-                    {errMsg}
-                  </div>
+                  <div className="rounded-xl border border-red-200 bg-red-50/50 p-4 text-[12px] text-red-600 leading-relaxed break-words">{errMsg}</div>
                 )}
-
-                {/* Validation warnings */}
-                {!VAULT && <p className="text-[12px] text-red-500">NEXT_PUBLIC_VAULT_ADDRESS not set.</p>}
                 {!AGENT_PUB && <p className="text-[12px] text-red-500">NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY not set.</p>}
-
-                {/* Pool address */}
-                {(() => {
-                  const t = SWAP_TARGETS.find((x) => x.symbol === tokenOut);
-                  return t ? (
-                    <p className="text-[11px] text-black/20" style={{ fontFamily: "var(--font-data)" }}>
-                      Pool {t.pool.slice(0, 10)}…{t.pool.slice(-6)}{" "}
-                      <a href={`https://chainscan-galileo.0g.ai/address/${t.pool}`} target="_blank" rel="noreferrer"
-                        className="text-black/35 underline hover:text-black/60 transition-colors">verify ↗</a>
-                    </p>
-                  ) : null;
-                })()}
               </div>
             </Card>
           </div>
 
-          {/* Footer nav */}
           <div className="flex items-center gap-6 pt-4 border-t border-black/[0.06]">
-            {[
-              { label: "Dashboard", href: "/dashboard" },
-              { label: "Trade History", href: "/history" },
-              { label: "Protocol Activity", href: "/activity" },
-            ].map((l) => (
-              <Link key={l.label} href={l.href}
-                className="text-xs text-black/35 hover:text-black/65 transition-colors tracking-wide">
-                {l.label}
-              </Link>
+            {[{ label: "Dashboard", href: "/dashboard" }, { label: "Trade History", href: "/history" }, { label: "Protocol Activity", href: "/activity" }].map((l) => (
+              <Link key={l.label} href={l.href} className="text-xs text-black/35 hover:text-black/65 transition-colors tracking-wide">{l.label}</Link>
             ))}
           </div>
-
         </div>
       </div>
     </div>
