@@ -1,14 +1,16 @@
 "use client";
 import Link from "next/link";
-import type { IntentLifecycle } from "@/hooks/useVaultEvents";
+
+export type IntentLifecycle = "none" | "pending" | "executed" | "withdrawn";
 
 interface Props {
   lifecycle: IntentLifecycle;
   receiptHash?: string;
   txHash?: string;
+  explorerTx?: string; // per-chain explorer base; falls back to Galileo
 }
 
-export function IntentStatusBanner({ lifecycle, receiptHash, txHash }: Props) {
+export function IntentStatusBanner({ lifecycle, receiptHash, txHash, explorerTx }: Props) {
   if (lifecycle === "none" || lifecycle === "withdrawn") return null;
 
   if (lifecycle === "pending") {
@@ -40,7 +42,7 @@ export function IntentStatusBanner({ lifecycle, receiptHash, txHash }: Props) {
           </Link>
         )}
         {txHash && (
-          <a href={`https://chainscan-galileo.0g.ai/tx/${txHash}`} target="_blank" rel="noreferrer"
+          <a href={`${explorerTx ?? "https://chainscan-galileo.0g.ai/tx/"}${txHash}`} target="_blank" rel="noreferrer"
             className="text-[11px] text-[#16a34a]/60 underline hover:text-[#16a34a]/80">
             tx ↗
           </a>

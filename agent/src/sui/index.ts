@@ -104,7 +104,10 @@ async function main() {
 
       const price = Number(mkt.price ?? 0);
       if (!(price > 0)) throw new Error("no price for SUI/USD");
-      const priceScaled = BigInt(Math.round(price * 1_000_000)); // Sui oracle scale = USD * 1e6
+      // Oracle: expected_out = amount_in * priceScaled / 1e6, with amount_in in MIST (SUI 9 dec)
+      // and output in oUSDC (6 dec). priceScaled = price * 1e3 bridges the 9->6 decimal gap so
+      // 1 SUI -> price oUSDC (raw), not 1000x. (price*1e6 over-paid by 1000x.)
+      const priceScaled = BigInt(Math.round(price * 1_000));
 
       const receipt = buildDecisionReceipt({
         chainKey: "sui-testnet",

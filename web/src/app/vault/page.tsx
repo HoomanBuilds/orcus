@@ -48,7 +48,7 @@ export default function VaultPage() {
   const [suiTx, setSuiTx] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isSuccess && evmTx) { toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash: evmTx }); refetchEvm(); resetWrite(); }
+    if (isSuccess && evmTx) { toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash: evmTx, explorerTx: activeChain.explorerTx }); refetchEvm(); resetWrite(); }
   }, [isSuccess, evmTx, toast, refetchEvm, resetWrite]);
 
   async function withdraw() {

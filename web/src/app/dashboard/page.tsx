@@ -108,7 +108,7 @@ function DashboardContent() {
   const [suiTx, setSuiTx] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isSuccess && evmTx) { toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash: evmTx }); refetchEvm(); resetWrite(); }
+    if (isSuccess && evmTx) { toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash: evmTx, explorerTx: activeChain.explorerTx }); refetchEvm(); resetWrite(); }
   }, [isSuccess, evmTx, toast, refetchEvm, resetWrite]);
 
   async function withdraw() {
@@ -163,6 +163,7 @@ function DashboardContent() {
             lifecycle={params.get("intent") === "submitted" && lifecycle === "none" ? "pending" : lifecycle}
             receiptHash={lastTrade?.receiptHash}
             txHash={lastTrade?.txHash}
+            explorerTx={lastTrade ? chainByKey(lastTrade.chainKey)?.explorerTx : undefined}
           />
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

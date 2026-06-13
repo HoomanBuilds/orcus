@@ -6,9 +6,9 @@ import { ChainBadge } from "@/components/chain-icon";
 import { WalletConnectPrompt } from "@/components/wallet-gate";
 
 export default function HistoryPage() {
-  const { vm, rows, isLoading, address } = usePortfolio({ userScoped: true });
+  const { vm, rows, isLoading, address, walletConnected } = usePortfolio({ userScoped: true });
 
-  if (vm === "none") {
+  if (!walletConnected) {
     return (
       <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
         <WalletConnectPrompt page="history" />

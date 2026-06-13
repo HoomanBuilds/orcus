@@ -5,28 +5,29 @@ import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { fetchEvmTradesAllChains } from "./evm-multichain";
 import { fetchSuiTrades, type TradeRow } from "./sui";
 import { SUI_CHAIN } from "./chains";
+import { useActiveChain } from "./active-chain";
 
-export type PortfolioVm = "evm" | "sui" | "none";
+export type PortfolioVm = "evm" | "sui";
 
-// Read-page data scoped to the connected wallet's VM:
-//   EVM wallet -> trades aggregated across all 5 EVM chains
-//   Sui wallet -> Sui trades only
-// `userScoped` false = protocol-wide feed (all users) for the activity page.
+// Single source of truth = the navbar's active chain VM (the connect button is VM-aware,
+// so the connected wallet always matches the active VM). EVM active -> all 5 EVM chains
+// aggregated; Sui active -> Sui only. `userScoped` true filters to the connected address;
+// `publicFallback` (activity) shows the feed even with no wallet connected.
 export function usePortfolio(opts?: { userScoped?: boolean; publicFallback?: boolean }) {
+  const { activeChain } = useActiveChain();
   const { address: evmAddress, isConnected: evmConnected } = useAccount();
   const suiAccount = useCurrentAccount();
   const suiClient = useSuiClient();
 
-  const rawVm: PortfolioVm = evmConnected ? "evm" : suiAccount ? "sui" : "none";
-  // Protocol-wide pages (activity) default to the EVM feed when no wallet is connected.
-  const vm: PortfolioVm = rawVm === "none" && opts?.publicFallback ? "evm" : rawVm;
-  // Only scope to a user when a wallet is actually connected.
-  const userScoped = (opts?.userScoped ?? true) && rawVm !== "none";
+  const vm: PortfolioVm = activeChain.vm === "sui" ? "sui" : "evm";
+  const walletConnected = vm === "evm" ? evmConnected : !!suiAccount;
+  const userScoped = (opts?.userScoped ?? true) && walletConnected;
+  const enabled = walletConnected || !!opts?.publicFallback;
 
   const evmQuery = useQuery({
     queryKey: ["portfolio", "evm", userScoped ? (evmAddress ?? "") : "all"],
     queryFn: () => fetchEvmTradesAllChains(userScoped ? (evmAddress as `0x${string}`) : undefined),
-    enabled: vm === "evm",
+    enabled: vm === "evm" && enabled,
     staleTime: 10_000,
     refetchInterval: 20_000,
   });
@@ -34,14 +35,14 @@ export function usePortfolio(opts?: { userScoped?: boolean; publicFallback?: boo
   const suiQuery = useQuery({
     queryKey: ["portfolio", "sui", userScoped ? (suiAccount?.address ?? "") : "all"],
     queryFn: () => fetchSuiTrades(suiClient, SUI_CHAIN, userScoped ? suiAccount?.address : undefined),
-    enabled: vm === "sui",
+    enabled: vm === "sui" && enabled,
     staleTime: 10_000,
     refetchInterval: 20_000,
   });
 
-  const rows: TradeRow[] = vm === "evm" ? (evmQuery.data ?? []) : vm === "sui" ? (suiQuery.data ?? []) : [];
-  const isLoading = vm === "evm" ? evmQuery.isLoading : vm === "sui" ? suiQuery.isLoading : false;
-  const address = vm === "evm" ? evmAddress : vm === "sui" ? suiAccount?.address : undefined;
+  const rows: TradeRow[] = vm === "evm" ? (evmQuery.data ?? []) : (suiQuery.data ?? []);
+  const isLoading = vm === "evm" ? evmQuery.isLoading : suiQuery.isLoading;
+  const address = userScoped ? (vm === "evm" ? evmAddress : suiAccount?.address) : undefined;
 
-  return { vm, rows, isLoading, address };
+  return { vm, walletConnected, rows, isLoading, address };
 }

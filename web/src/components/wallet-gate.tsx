@@ -1,5 +1,7 @@
 "use client";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ConnectButton as SuiConnectButton } from "@mysten/dapp-kit";
+import { useActiveChain } from "@/lib/active-chain";
 
 export function WalletGate({ children }: { children: React.ReactNode }) {
   return (
@@ -9,8 +11,11 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Full-page prompt shown when wallet is not connected
+// Full-page prompt shown when wallet is not connected. VM-aware: shows the Sui
+// connect on the Sui tab, RainbowKit on EVM chains.
 export function WalletConnectPrompt({ page }: { page: string }) {
+  const { activeChain } = useActiveChain();
+  const isSui = activeChain.vm === "sui";
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6"
@@ -69,19 +74,18 @@ export function WalletConnectPrompt({ page }: { page: string }) {
             : "Connect your wallet to continue."}
         </p>
 
-        {/* ConnectButton — let RainbowKit handle all states */}
+        {/* VM-aware connect */}
         <div className="flex justify-center">
-          <ConnectButton
-            label="Connect wallet"
-            showBalance={false}
-            chainStatus="none"
-            accountStatus="address"
-          />
+          {isSui ? (
+            <SuiConnectButton connectText="Connect Sui wallet" />
+          ) : (
+            <ConnectButton label="Connect wallet" showBalance={false} chainStatus="none" accountStatus="address" />
+          )}
         </div>
 
         {/* Protocol badges */}
         <div className="mt-10 flex items-center justify-center gap-4">
-          {["ECIES-256", "Intel TDX", "0G Galileo"].map(b => (
+          {["ECIES-256", "Intel TDX", isSui ? "Sui testnet" : activeChain.name].map(b => (
             <span
               key={b}
               className="text-[9px] tracking-widest text-black/25 uppercase border border-black/[0.07] px-2 py-1 rounded-full"

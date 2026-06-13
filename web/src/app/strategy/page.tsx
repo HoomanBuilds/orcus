@@ -91,7 +91,7 @@ export default function StrategyPage() {
 
   useEffect(() => {
     if (phase === "done" && txHash) {
-      toast({ type: "success", title: "Intent submitted", description: "TEE agent will pick it up shortly", txHash });
+      toast({ type: "success", title: "Intent submitted", description: "TEE agent will pick it up shortly", txHash, explorerTx: activeChain.explorerTx });
       router.push("/dashboard?intent=submitted");
     }
   }, [phase, txHash, toast, router]);

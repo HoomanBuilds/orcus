@@ -8,6 +8,7 @@ interface Toast {
   title: string;
   description?: string;
   txHash?: string;
+  explorerTx?: string; // per-chain explorer base (append txHash); falls back to Galileo
 }
 
 interface ToastCtx { toast: (t: Omit<Toast, "id">) => void; }
@@ -41,7 +42,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-medium text-[#111]">{t.title}</p>
               {t.description && <p className="text-[12px] text-black/40 mt-1">{t.description}</p>}
               {t.txHash && (
-                <a href={`https://chainscan-galileo.0g.ai/tx/${t.txHash}`} target="_blank" rel="noreferrer"
+                <a href={`${t.explorerTx ?? "https://chainscan-galileo.0g.ai/tx/"}${t.txHash}`} target="_blank" rel="noreferrer"
                   className="text-[11px] text-black/40 underline hover:text-black/70 mt-1.5 inline-block">
                   View tx ↗
                 </a>
