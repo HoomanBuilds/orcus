@@ -10,6 +10,8 @@ import { vaultAbi } from "@/lib/vaultAbi";
 import { useActiveChain } from "@/lib/active-chain";
 import { suiDepositTx, fetchSuiIntent } from "@/lib/sui";
 import { ChainIcon } from "@/components/chain-icon";
+import { StrategyBuilder, type BuilderState } from "@/components/strategy-builder";
+import type { Strategy } from "@/lib/strategy-schema";
 import { useToast } from "@/components/toast";
 import { WalletConnectPrompt } from "@/components/wallet-gate";
 import Link from "next/link";
@@ -61,7 +63,7 @@ export default function StrategyPage() {
   const dec = activeChain.nativeDecimals;
   const sym = activeChain.nativeSymbol;
 
-  const [goal, setGoal] = useState("");
+  const [builderState, setBuilderState] = useState<BuilderState>({ conditions: [], logic: "AND", valid: false });
   const [amount, setAmount] = useState("0.01");
   const [slippage, setSlippage] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -119,14 +121,21 @@ export default function StrategyPage() {
   }, [phase, txHash, toast, router]);
 
   const amountValid = !!amount && !isNaN(+amount) && +amount > 0;
-  const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid && (!erc20 || validToken);
+  const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid && builderState.valid && (!erc20 || validToken);
 
   async function submit() {
     if (!canSubmit) return;
     setErrMsg(null);
     try {
       setPhase("encrypting");
-      const ciphertext = encryptIntentBrowser(AGENT_PUB, { goal, ts: Date.now() });
+      const strategy: Strategy = {
+        version: 1,
+        conditions: builderState.conditions,
+        logic: builderState.logic,
+        notes: builderState.notes,
+        trade: { inputAsset: erc20 ? tokenAddr : "native", amountIn: amount, outputToken: "oUSDC", slippageBps: Number(slippage) || 0 },
+      };
+      const ciphertext = encryptIntentBrowser(AGENT_PUB, strategy);
       setCipher(ciphertext.slice(0, 96) + "...");
       await new Promise((r) => setTimeout(r, 350));
       setCipher(null);
@@ -295,16 +304,13 @@ export default function StrategyPage() {
               </div>
               <div className="p-6 flex flex-col gap-6">
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Strategy goal</label>
+                  <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Strategy</label>
                   {cipher ? (
                     <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4 text-[12px] min-h-[90px] leading-relaxed break-all" style={{ fontFamily: "var(--font-data)", color: "#111" }}>{cipher}</div>
                   ) : (
-                    <textarea rows={4} value={goal} onChange={(e) => setGoal(e.target.value)}
-                      placeholder={`e.g. swap when ${sym} dips below the 1h moving average and momentum is positive`}
-                      className="w-full rounded-xl border border-black/10 bg-white p-4 text-[13px] leading-relaxed resize-none outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
-                      style={{ fontFamily: "inherit", color: "#111" }} />
+                    <StrategyBuilder onChange={setBuilderState} />
                   )}
-                  <p className="text-[11px] text-black/25">ECIES-256 encrypted in-browser. Only the TEE can read this.</p>
+                  <p className="text-[11px] text-black/25">Conditions are ECIES-256 encrypted in-browser. Only the TEE can read them.</p>
                 </div>
 
                 {/* Input asset: native vs ERC20 (EVM only; Sui deposits native SUI) */}
