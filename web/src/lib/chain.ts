@@ -1,5 +1,7 @@
 import { defineChain } from "viem";
 
+export { arbitrumSepolia, baseSepolia, avalancheFuji, mantleSepoliaTestnet } from "viem/chains";
+
 export const galileo = defineChain({
   id: 16602,
   name: "0G Galileo",
