@@ -32,6 +32,13 @@ export function suiDepositTx(chain: ChainMeta, ciphertextHex: string, slippageBp
   return tx;
 }
 
+export function suiWithdrawTx(chain: ChainMeta): Transaction {
+  if (!chain.sui) throw new Error("not a Sui chain");
+  const tx = new Transaction();
+  tx.moveCall({ target: `${chain.sui.packageId}::vault::withdraw`, arguments: [tx.object(chain.vault)] });
+  return tx;
+}
+
 export interface SuiIntent { active: boolean; amountMist: bigint; }
 
 // Reads the user's intent from the vault's intents Table dynamic field.
