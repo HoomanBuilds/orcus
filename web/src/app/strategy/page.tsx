@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { useAccount, useReadContract, useWriteContract, usePublicClient } from "wagmi";
 import { useCurrentAccount, useSuiClient, useSignAndExecuteTransaction, ConnectButton as SuiConnectButton } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits, erc20Abi, isAddress } from "viem";
 import { useRouter } from "next/navigation";
 import { encryptIntentBrowser } from "@/lib/encrypt";
 import { vaultAbi } from "@/lib/vaultAbi";
@@ -16,7 +16,7 @@ import Link from "next/link";
 
 const AGENT_PUB = process.env.NEXT_PUBLIC_AGENT_ECIES_PUBLIC_KEY || "";
 
-type Phase = "idle" | "encrypting" | "submitting" | "done" | "error";
+type Phase = "idle" | "encrypting" | "approving" | "submitting" | "done" | "error";
 
 function Card({ children, className = "", style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -52,6 +52,7 @@ export default function StrategyPage() {
 
   const { address: evmAddress } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: activeChain.evmChainId });
   const suiAccount = useCurrentAccount();
   const suiClient = useSuiClient();
   const { mutateAsync: suiSignExec } = useSignAndExecuteTransaction();
@@ -67,9 +68,22 @@ export default function StrategyPage() {
   const [cipher, setCipher] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  // Input asset: native (depositNative) or an ERC20 (approve -> depositToken). EVM only.
+  const [inputMode, setInputMode] = useState<"native" | "erc20">("native");
+  const [tokenAddr, setTokenAddr] = useState("");
+  const erc20 = !isSui && inputMode === "erc20";
+  const validToken = erc20 && isAddress(tokenAddr);
 
   // Reset transient state when the active chain changes.
-  useEffect(() => { setPhase("idle"); setTxHash(null); setErrMsg(null); setCipher(null); }, [activeChain.key]);
+  useEffect(() => { setPhase("idle"); setTxHash(null); setErrMsg(null); setCipher(null); setInputMode("native"); setTokenAddr(""); }, [activeChain.key]);
+
+  // ERC20 reads (when an ERC20 input asset is selected).
+  const tokenCfg = { abi: erc20Abi, address: tokenAddr as `0x${string}`, chainId: activeChain.evmChainId } as const;
+  const tokenEnabled = { enabled: !!validToken };
+  const { data: tokenDecimals } = useReadContract({ ...tokenCfg, functionName: "decimals", query: tokenEnabled });
+  const { data: tokenSymbol } = useReadContract({ ...tokenCfg, functionName: "symbol", query: tokenEnabled });
+  const { data: tokenBalance } = useReadContract({ ...tokenCfg, functionName: "balanceOf", args: evmAddress ? [evmAddress] : undefined, query: { enabled: !!validToken && !!evmAddress, refetchInterval: 10_000 } });
+  const { data: tokenAllowance, refetch: refetchAllowance } = useReadContract({ ...tokenCfg, functionName: "allowance", args: evmAddress ? [evmAddress, activeChain.vault as `0x${string}`] : undefined, query: { enabled: !!validToken && !!evmAddress, refetchInterval: 10_000 } });
 
   const { data: evmIntent } = useReadContract({
     abi: vaultAbi, address: activeChain.vault as `0x${string}`, functionName: "intents",
@@ -89,6 +103,14 @@ export default function StrategyPage() {
   const hasActive = isSui ? (suiIntent?.active ?? false) : (evmIntent?.[4] === true);
   const slippageDisplay = !isSui && hasActive && evmIntent ? `${evmIntent[3].toString()} bps` : "—";
 
+  // Effective input asset (native vs ERC20).
+  const effDec = erc20 ? Number(tokenDecimals ?? 18) : dec;
+  const effSym = erc20 ? (tokenSymbol ?? "TOKEN") : sym;
+  let needsApprove = false;
+  try {
+    if (erc20 && amount && +amount > 0) needsApprove = ((tokenAllowance ?? 0n) as bigint) < parseUnits(amount, effDec);
+  } catch { needsApprove = false; }
+
   useEffect(() => {
     if (phase === "done" && txHash) {
       toast({ type: "success", title: "Intent submitted", description: "TEE agent will pick it up shortly", txHash, explorerTx: activeChain.explorerTx });
@@ -97,7 +119,7 @@ export default function StrategyPage() {
   }, [phase, txHash, toast, router]);
 
   const amountValid = !!amount && !isNaN(+amount) && +amount > 0;
-  const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid;
+  const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid && (!erc20 || validToken);
 
   async function submit() {
     if (!canSubmit) return;
@@ -108,13 +130,31 @@ export default function StrategyPage() {
       setCipher(ciphertext.slice(0, 96) + "...");
       await new Promise((r) => setTimeout(r, 350));
       setCipher(null);
-      setPhase("submitting");
-      const amt = parseUnits(amount, dec);
+      const amt = parseUnits(amount, effDec);
       if (isSui) {
-        const tx = suiDepositTx(activeChain, ciphertext, Number(slippage), amt);
-        const res = await suiSignExec({ transaction: tx });
+        setPhase("submitting");
+        const res = await suiSignExec({ transaction: suiDepositTx(activeChain, ciphertext, Number(slippage), amt) });
         setTxHash(res.digest);
+      } else if (erc20) {
+        if (((tokenAllowance ?? 0n) as bigint) < amt) {
+          setPhase("approving");
+          const approveHash = await writeContractAsync({
+            abi: erc20Abi, address: tokenAddr as `0x${string}`,
+            functionName: "approve", args: [activeChain.vault as `0x${string}`, amt],
+            chainId: activeChain.evmChainId,
+          });
+          if (publicClient) await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          await refetchAllowance();
+        }
+        setPhase("submitting");
+        const hash = await writeContractAsync({
+          abi: vaultAbi, address: activeChain.vault as `0x${string}`,
+          functionName: "depositToken", args: [tokenAddr as `0x${string}`, amt, ciphertext, Number(slippage)],
+          chainId: activeChain.evmChainId,
+        });
+        setTxHash(hash);
       } else {
+        setPhase("submitting");
         const hash = await writeContractAsync({
           abi: vaultAbi, address: activeChain.vault as `0x${string}`,
           functionName: "depositNative", args: [ciphertext, Number(slippage)],
@@ -133,10 +173,12 @@ export default function StrategyPage() {
   const submitLabel = () => {
     if (!address)               return "Connect wallet first";
     if (hasActive)              return "Active intent — withdraw first";
+    if (erc20 && !validToken)   return "Enter a valid token address";
     if (phase === "encrypting") return "Encrypting intent…";
+    if (phase === "approving")  return `Approving ${effSym}…`;
     if (phase === "submitting") return "Confirm in wallet…";
     if (phase === "done")       return "Intent submitted ✓";
-    return `Encrypt & submit  ↗  ${sym} → oUSDC`;
+    return `${needsApprove ? "Approve & submit" : "Encrypt & submit"}  ↗  ${effSym} → oUSDC`;
   };
 
   const STEPS = [
@@ -265,15 +307,46 @@ export default function StrategyPage() {
                   <p className="text-[11px] text-black/25">ECIES-256 encrypted in-browser. Only the TEE can read this.</p>
                 </div>
 
+                {/* Input asset: native vs ERC20 (EVM only; Sui deposits native SUI) */}
+                {!isSui && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Deposit asset</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([["native", `Native ${sym}`], ["erc20", "ERC-20 token"]] as const).map(([m, lbl]) => (
+                        <button key={m} onClick={() => setInputMode(m)} type="button"
+                          className="rounded-xl border p-3 text-left transition-all"
+                          style={{ border: inputMode === m ? "1px solid rgba(0,0,0,0.25)" : "1px solid rgba(0,0,0,0.07)", background: inputMode === m ? "rgba(0,0,0,0.04)" : "white", cursor: "pointer" }}>
+                          <p className="text-[13px] font-medium text-[#111]">{lbl}</p>
+                        </button>
+                      ))}
+                    </div>
+                    {erc20 && (
+                      <div className="flex flex-col gap-1.5 mt-1">
+                        <input value={tokenAddr} onChange={(e) => setTokenAddr(e.target.value.trim())} placeholder="ERC-20 token address (0x…)"
+                          className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-[12px] outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
+                          style={{ fontFamily: "var(--font-data)", color: "#111" }} />
+                        {tokenAddr && !validToken && <p className="text-[11px] text-red-500">Not a valid address.</p>}
+                        {validToken && (
+                          <p className="text-[11px] text-black/35" style={{ fontFamily: "var(--font-data)" }}>
+                            {tokenSymbol ? `${tokenSymbol} · ` : ""}balance {(+formatUnits((tokenBalance ?? 0n) as bigint, effDec)).toFixed(4)}
+                            {needsApprove ? " · approval required" : (tokenAllowance !== undefined ? " · approved" : "")}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-black/25">Testnet note: deposit any ERC-20; the mock stack only has oUSDC + wrapped-native, so this is mainly for real-token chains.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Settlement note (agent settles in the chain's oUSDC) */}
                 <div className="flex items-center gap-2.5 rounded-xl border border-black/[0.07] bg-black/[0.015] px-4 py-3">
                   <ChainIcon chain={activeChain} size={18} />
-                  <p className="text-[12px] text-black/55">Deposits {sym}; the sealed agent settles into <span className="text-black/80 font-medium">oUSDC</span> on {activeChain.name}.</p>
+                  <p className="text-[12px] text-black/55">Deposits {effSym}; the sealed agent settles into <span className="text-black/80 font-medium">oUSDC</span> on {activeChain.name}.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Amount ({sym})</label>
+                    <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Amount ({effSym})</label>
                     <input value={amount} onChange={(e) => setAmount(e.target.value)}
                       className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-[13px] outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
                       style={{ fontFamily: "var(--font-data)", color: "#111", fontVariantNumeric: "tabular-nums" }} />
