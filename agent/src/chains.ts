@@ -9,6 +9,7 @@ export interface ChainConfig {
   rpc: string;
   vault: string;          // deployed StrategyVault (v2)
   usdc: string;           // settlement token used as ExecParams.tokenOut (the deployed oUSDC on testnets)
+  usdcDecimals: number;   // decimals of the settlement token; the Binance push is scaled to 10^this
   poolFee: number;        // Uniswap V3 fee tier for ExecParams.fee (ignored by the mock router)
   priceMode: PriceMode;   // "mock": agent ABI-encodes a Binance price into priceUpdate (testnets).
                           // "pyth": agent fetches a Hermes VAA + fee (mainnet, real Pyth).
@@ -27,6 +28,7 @@ interface ChainMeta {
   name: string;
   chainId: number;
   poolFee: number;
+  usdcDecimals?: number;  // defaults to 18 (mock oUSDC); set 6 for real USDC chains
   priceMode: PriceMode;
   binanceSymbol: string;
   coingeckoId: string;
@@ -142,6 +144,27 @@ const META: Record<string, ChainMeta> = {
     zgSecretEnv: "MANTLE_SEPOLIA_ZG_API_SECRET",
     zgModelEnv: "MANTLE_SEPOLIA_ZG_MODEL",
   },
+  // Ethereum Sepolia: real Uniswap V3 (SwapRouter02), settles in real USDC (6dec). DEPLOY_MODE=realpush.
+  sepolia: {
+    key: "sepolia",
+    name: "Ethereum Sepolia",
+    chainId: 11155111,
+    poolFee: 500,
+    usdcDecimals: 6,
+    priceMode: "mock",
+    binanceSymbol: "ETHUSDT",
+    coingeckoId: "ethereum",
+    explorerTx: "https://sepolia.etherscan.io/tx/",
+    lookbackBlocks: 5000,
+    pollIntervalMs: 4000,
+    rpcEnv: "SEPOLIA_RPC",
+    rpcDefault: "https://sepolia.drpc.org",
+    vaultEnv: "SEPOLIA_VAULT",
+    usdcEnv: "SEPOLIA_USDC",
+    zgUrlEnv: "SEPOLIA_ZG_SERVICE_URL",
+    zgSecretEnv: "SEPOLIA_ZG_API_SECRET",
+    zgModelEnv: "SEPOLIA_ZG_MODEL",
+  },
 };
 
 export function chainKeys(): string[] {
@@ -166,6 +189,7 @@ export function resolveChain(): ChainConfig {
   const zgModel      = process.env[m.zgModelEnv] ?? process.env.ZG_MODEL ?? "qwen/qwen2.5-omni-7b";
   return {
     key: m.key, name: m.name, chainId: m.chainId, rpc, vault, usdc,
+    usdcDecimals: m.usdcDecimals ?? 18,
     poolFee: m.poolFee, priceMode: m.priceMode,
     binanceSymbol: m.binanceSymbol, coingeckoId: m.coingeckoId,
     explorerTx: m.explorerTx, lookbackBlocks: m.lookbackBlocks, pollIntervalMs: m.pollIntervalMs,

@@ -1,11 +1,12 @@
 import { parseUnits } from "ethers";
 
-// Native/USD price scaled to 1e18 (USD per 1 wrapped-native, * 1e18). Per-chain symbol
-// (e.g. ETHUSDT on Arbitrum Sepolia, 0GUSDT on Galileo). Primary: Binance public API
-// (no key). Fallback: CoinGecko by coin id. Throws if both fail.
+// Native/USD price scaled to 10^outDecimals. OrcusOracle.getExpectedOut does
+// amountIn(18dec) * priceScaled / 1e18, so priceScaled must carry the OUTPUT token's
+// decimals (18 for mock oUSDC, 6 for real USDC). Binance primary, CoinGecko fallback.
 export async function getOgPriceScaled(
   symbol = "0GUSDT",
   coingeckoId = "zero-gravity",
+  outDecimals = 18,
 ): Promise<bigint> {
   try {
     const res = await fetch(
@@ -14,7 +15,7 @@ export async function getOgPriceScaled(
     );
     if (res.ok) {
       const d = (await res.json()) as { price?: string };
-      if (d.price && Number(d.price) > 0) return parseUnits(d.price, 18);
+      if (d.price && Number(d.price) > 0) return parseUnits(d.price, outDecimals);
     }
   } catch {
     // fall through to coingecko
@@ -27,7 +28,7 @@ export async function getOgPriceScaled(
     if (res.ok) {
       const d = (await res.json()) as Record<string, { usd?: number }>;
       const p = d[coingeckoId]?.usd;
-      if (p && p > 0) return parseUnits(p.toString(), 18);
+      if (p && p > 0) return parseUnits(p.toString(), outDecimals);
     }
   } catch {
     // fall through to throw

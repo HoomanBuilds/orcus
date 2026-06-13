@@ -102,7 +102,7 @@ async function main() {
       let priceUpdate = "0x";
       let priceUpdateValue = 0n;
       if (chain.priceMode === "mock") {
-        priceScaled = await getOgPriceScaled(chain.binanceSymbol, chain.coingeckoId);
+        priceScaled = await getOgPriceScaled(chain.binanceSymbol, chain.coingeckoId, chain.usdcDecimals);
         priceUpdate = AbiCoder.defaultAbiCoder().encode(["uint256"], [priceScaled]);
       }
       const oracleAddr = await vault["oracle"]() as string;
@@ -142,7 +142,6 @@ async function main() {
       const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
       log("storage", `receipt=${receiptHash}`);
 
-      // The mock router settles only in the deployed oUSDC (real multi-token only on real DEX chains).
       const tokenOut = settlementToken;
 
       const deadline = Math.floor(Date.now() / 1000) + 300;
@@ -158,7 +157,7 @@ async function main() {
       };
       const signature = await signExecParams(wallet, chain.chainId, chain.vault, params);
 
-      log("swap", `executeTrade settle=oUSDC(${tokenOut}) nonce=${nonce}`);
+      log("swap", `executeTrade settle=${tokenOut} (${chain.usdcDecimals}dec) fee=${chain.poolFee} nonce=${nonce}`);
       const tx = await vault["executeTrade"](params, signature, priceUpdate, { value: priceUpdateValue });
       const r = await (tx as { wait(): Promise<{ hash: string }> }).wait();
       log("swap", `executed tx=${r?.hash}`);
