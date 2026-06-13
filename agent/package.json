@@ -9,6 +9,7 @@
     "start": "tsx src/index.ts",
     "start:sui": "tsx src/sui/index.ts",
     "intent:sui": "tsx src/scripts/create-sui-intent.ts",
+    "intent:evm": "tsx src/scripts/create-evm-intent.ts",
     "setup": "tsx src/scripts/setup.ts",
     "typecheck": "tsc --noEmit",
     "postinstall": "bash patches/0g-ts-sdk-market-fix.sh"
