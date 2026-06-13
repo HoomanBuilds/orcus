@@ -17,6 +17,7 @@ import { buildPythPriceUpdate } from "./price/pyth.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
+const ZG_RPC = process.env.ZG_RPC ?? "https://evmrpc-testnet.0g.ai"; // 0G Storage settles on Galileo, not the trading chain
 
 function log(tag: string, msg: string) {
   console.log(`[${new Date().toISOString()}] [${tag}] ${msg}`);
@@ -32,6 +33,7 @@ async function main() {
   const wallet = new Wallet(env.agentPk, provider);
   const vault = new Contract(chain.vault, vaultAbi as never[], wallet);
   const indexer = new Indexer(env.storageIndexer);
+  const zgWallet = chain.rpc === ZG_RPC ? wallet : new Wallet(env.agentPk, new JsonRpcProvider(ZG_RPC));
 
   log("boot", `chain=${chain.name} (${chain.chainId}) vault=${chain.vault}`);
   log("boot", `agent=${wallet.address}`);
@@ -132,9 +134,9 @@ async function main() {
       const receiptHashRaw = await writeReceipt(
         indexer as never,
         null,
-        wallet,
+        zgWallet,
         receipt,
-        chain.rpc,
+        ZG_RPC,
       );
       const raw = receiptHashRaw.startsWith("0x") ? receiptHashRaw : `0x${receiptHashRaw}`;
       const rawBytes = Buffer.from(raw.replace(/^0x/, ""), "hex");
