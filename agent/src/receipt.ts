@@ -4,6 +4,18 @@
  * exposing the user's sealed strategy. The plaintext strategy never appears here
  * (it stays inside the TEE enclave; see plan Part 6).
  */
+import type { Condition } from "./strategy/schema.js";
+import type { Evaluated } from "./strategy/evaluate.js";
+
+export interface StrategyTrail {
+  conditions: Condition[];
+  logic: "AND" | "OR";
+  evaluated: Evaluated[];   // each condition's computed value + pass/fail (code)
+  action: string;          // code-decided EXECUTE/WAIT
+  reason: string;          // AI reason or code fallback
+  aiReason: string | null; // the raw AI sentence, null if it fell back
+}
+
 export interface DecisionReceipt {
   version: "1";
   ts: number;
@@ -19,6 +31,7 @@ export interface DecisionReceipt {
   };
   tee: { provider: string; verifiability: "TeeML" };
   verdict: { action: string; reason: string };
+  strategy?: StrategyTrail;        // present for typed-strategy intents (not legacy free-text)
 }
 
 export function buildDecisionReceipt(p: {
@@ -33,6 +46,7 @@ export function buildDecisionReceipt(p: {
   teeProvider: string;
   action: string;
   reason: string;
+  strategy?: StrategyTrail;
 }): DecisionReceipt {
   let market: unknown;
   try {
@@ -51,5 +65,6 @@ export function buildDecisionReceipt(p: {
     },
     tee: { provider: p.teeProvider, verifiability: "TeeML" },
     verdict: { action: p.action, reason: p.reason },
+    ...(p.strategy ? { strategy: p.strategy } : {}),
   };
 }

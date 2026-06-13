@@ -6,7 +6,11 @@ import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
 import { buildMarketSnapshot } from "./indicators.js";
-import { buildDecisionReceipt } from "./receipt.js";
+import { buildDecisionReceipt, type StrategyTrail } from "./receipt.js";
+import { isStrategy } from "./strategy/schema.js";
+import { evaluateStrategy } from "./strategy/evaluate.js";
+import { buildIndicators } from "./strategy/indicators-adapter.js";
+import { narrate } from "./strategy/narrate.js";
 import { signExecParams } from "./sign/execParams.js";
 import { getOgPriceScaled } from "./price/binance.js";
 import { buildPythPriceUpdate } from "./price/pyth.js";
@@ -56,23 +60,40 @@ async function main() {
       log("intent", `user=${user} amount=${amount.toString()}`);
 
       const intent = await vault["intents"](user) as { encryptedGoal: string };
-      const plain = decryptIntent<{ goal: string; tokenOut?: string }>(
-        env.agentEciesSk,
-        intent.encryptedGoal,
-      );
-      log("decrypt", `goal="${plain.goal}" tokenOut=${plain.tokenOut ?? "USDC"}`);
+      const plain = decryptIntent<unknown>(env.agentEciesSk, intent.encryptedGoal);
 
       log("market", "building structured snapshot...");
       const market = await buildMarketSnapshot(chain.binanceSymbol, chain.coingeckoId);
       const mkt = JSON.parse(market) as { price?: number; trend?: string; indicators?: { rsi14?: number | null } };
       log("market", `price=${mkt.price} trend=${mkt.trend} rsi14=${mkt.indicators?.rsi14 ?? "n/a"}`);
 
-      log("tee", "calling sealed inference...");
-      const decision = await sealedDecide(chain.zgServiceUrl, chain.zgApiSecret, chain.zgModel, JSON.stringify(plain), market);
-      log("tee", `action=${decision.action} reason="${decision.reason}"`);
+      let action: string;
+      let reason: string;
+      let strategyTrail: StrategyTrail | undefined;
 
-      if (decision.action !== "EXECUTE") {
-        log("tee", "decision is WAIT — skipping execution");
+      if (isStrategy(plain)) {
+        // Typed strategy: code computes indicators + evaluates conditions (authoritative);
+        // the sealed AI only writes the reason (with code fallback).
+        log("strategy", `typed strategy: ${plain.conditions.length} condition(s) logic=${plain.logic}`);
+        const ind = await buildIndicators(chain.binanceSymbol, chain.coingeckoId);
+        const ev = evaluateStrategy(plain, ind);
+        log("strategy", `code verdict=${ev.action} [${ev.evaluated.map((e) => `${e.desc}:${e.pass ? "✓" : "✗"}`).join(", ")}]`);
+        const narration = await narrate(chain.zgServiceUrl, chain.zgApiSecret, chain.zgModel, plain, ev);
+        action = ev.action;
+        reason = narration.reason;
+        strategyTrail = { conditions: plain.conditions, logic: plain.logic, evaluated: ev.evaluated, action: ev.action, reason: narration.reason, aiReason: narration.aiReason };
+      } else {
+        // Legacy free-text {goal}: one-shot sealed decision.
+        const legacy = plain as { goal?: string };
+        log("decrypt", `legacy free-text goal="${legacy.goal ?? ""}"`);
+        const decision = await sealedDecide(chain.zgServiceUrl, chain.zgApiSecret, chain.zgModel, JSON.stringify(plain), market);
+        action = decision.action;
+        reason = decision.reason;
+      }
+      log("tee", `action=${action} reason="${reason}"`);
+
+      if (action !== "EXECUTE") {
+        log("decision", "WAIT — skipping execution");
         return;
       }
 
@@ -104,8 +125,9 @@ async function main() {
         oracleAddress: oracleAddr,
         priceScaled: priceScaled === null ? null : priceScaled.toString(),
         teeProvider: TEE_PROVIDER,
-        action: decision.action,
-        reason: decision.reason,
+        action,
+        reason,
+        strategy: strategyTrail,
       });
       const receiptHashRaw = await writeReceipt(
         indexer as never,
@@ -120,9 +142,7 @@ async function main() {
       const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
       log("storage", `receipt=${receiptHash}`);
 
-      // The mock router settles only in the deployed oUSDC; the user's tokenOut
-      // preference is cosmetic on the mock (real multi-token only on real DEX chains).
-      const requested = plain.tokenOut ?? "USDC";
+      // The mock router settles only in the deployed oUSDC (real multi-token only on real DEX chains).
       const tokenOut = settlementToken;
 
       const deadline = Math.floor(Date.now() / 1000) + 300;
@@ -138,7 +158,7 @@ async function main() {
       };
       const signature = await signExecParams(wallet, chain.chainId, chain.vault, params);
 
-      log("swap", `executeTrade requested=${requested} settle=oUSDC(${tokenOut}) nonce=${nonce}`);
+      log("swap", `executeTrade settle=oUSDC(${tokenOut}) nonce=${nonce}`);
       const tx = await vault["executeTrade"](params, signature, priceUpdate, { value: priceUpdateValue });
       const r = await (tx as { wait(): Promise<{ hash: string }> }).wait();
       log("swap", `executed tx=${r?.hash}`);
