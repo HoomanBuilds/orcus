@@ -61,6 +61,32 @@ export function ReceiptViewer({ receipt }: { receipt: DecisionReceipt }) {
         <p className="mt-4 text-sm text-black/55 leading-relaxed">{receipt.verdict.reason}</p>
       </div>
 
+      {/* Strategy conditions evaluated (code-decided, AI-narrated) */}
+      {receipt.strategy && (
+        <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
+          <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-3" style={{ fontFamily: "var(--font-data)" }}>
+            Strategy conditions ({receipt.strategy.logic})
+          </p>
+          <div className="flex flex-col gap-2">
+            {receipt.strategy.evaluated.map((e, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 text-sm" style={{ fontFamily: "var(--font-data)" }}>
+                <span className="text-[#111]">{e.desc}</span>
+                <span className="flex items-center gap-2">
+                  {e.computedValue !== null && <span className="text-black/40">{e.computedValue}</span>}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px]"
+                    style={{ background: e.pass ? "rgba(22,163,74,0.10)" : "rgba(180,120,10,0.10)", color: e.pass ? "#15803d" : "#9a6700" }}>
+                    {e.pass ? "pass" : "fail"}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] text-black/30">
+            Conditions evaluated in code (authoritative); the verdict above is narrated by the sealed AI{receipt.strategy.aiReason === null ? " (fell back to a code reason)" : ""}.
+          </p>
+        </div>
+      )}
+
       {/* Decision metadata */}
       <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
         <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>

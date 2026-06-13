@@ -15,6 +15,14 @@ export interface DecisionReceipt {
   };
   tee: { provider: string; verifiability: string };
   verdict: { action: string; reason: string };
+  strategy?: {
+    conditions: unknown[];
+    logic: string;
+    evaluated: Array<{ desc: string; computedValue: number | null; pass: boolean }>;
+    action: string;
+    reason: string;
+    aiReason: string | null;
+  };
 }
 
 export async function fetchReceipt(root: string): Promise<DecisionReceipt | null> {
