@@ -1,5 +1,6 @@
 "use client";
 import {
+  NetworkEthereum,
   NetworkArbitrumSepolia,
   NetworkBaseSepolia,
   NetworkAvalancheFuji,
@@ -11,6 +12,7 @@ type IconCmp = React.ComponentType<{ size?: number; variant?: "mono" | "branded"
 
 // 0G Galileo + Mantle Sepolia have no usable (visible) branded web3icon -> letter-badge fallback.
 const ICONS: Record<string, IconCmp> = {
+  "sepolia": NetworkEthereum,
   "arbitrum-sepolia": NetworkArbitrumSepolia,
   "base-sepolia": NetworkBaseSepolia,
   "avalanche-fuji": NetworkAvalancheFuji,

@@ -75,6 +75,16 @@ export const CHAINS: ChainMeta[] = [
     iconNetwork: "mantle",
   },
   {
+    key: "sepolia", name: "Ethereum Sepolia", shortLabel: "ETH", vm: "evm", evmChainId: 11155111,
+    rpcUrl: "https://sepolia.drpc.org",
+    vault: "0x5e08CEd8e3b901B6A46e1488b7a7F52576ceb411",
+    settlementToken: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // real USDC (6dec) via real Uniswap V3
+    nativeSymbol: "ETH", nativeDecimals: 18,
+    explorerTx: "https://sepolia.etherscan.io/tx/",
+    explorerAddr: "https://sepolia.etherscan.io/address/",
+    iconNetwork: "ethereum",
+  },
+  {
     key: "sui", name: "Sui Testnet", shortLabel: "SUI", vm: "sui",
     rpcUrl: "https://fullnode.testnet.sui.io:443",
     vault: "0x47e998d5b287f123e128f54b5b23f6f38a2bde1bf1fa8ad288a74d81b0b154f1",

@@ -1,11 +1,12 @@
 import { createPublicClient, http, type Chain } from "viem";
-import { galileo, arbitrumSepolia, baseSepolia, avalancheFuji, mantleSepoliaTestnet } from "./chain";
+import { galileo, sepolia, arbitrumSepolia, baseSepolia, avalancheFuji, mantleSepoliaTestnet } from "./chain";
 import { vaultAbi } from "./vaultAbi";
 import { EVM_CHAINS } from "./chains";
 import type { TradeRow } from "./sui";
 
 const VIEM_CHAINS: Record<string, Chain> = {
   "galileo": galileo,
+  "sepolia": sepolia,
   "arbitrum-sepolia": arbitrumSepolia,
   "base-sepolia": baseSepolia,
   "avalanche-fuji": avalancheFuji,
@@ -17,7 +18,7 @@ const VIEM_CHAINS: Record<string, Chain> = {
 const LOOKBACK = 20_000n;
 const CHUNK = 5_000n;
 
-// Aggregates TradeExecuted across all 5 EVM chains. One bad RPC -> that chain yields [],
+// Aggregates TradeExecuted across all EVM chains. One bad RPC -> that chain yields [],
 // never breaks the aggregate. Returns newest-first per chain.
 export async function fetchEvmTradesAllChains(user?: `0x${string}`): Promise<TradeRow[]> {
   const perChain = await Promise.all(

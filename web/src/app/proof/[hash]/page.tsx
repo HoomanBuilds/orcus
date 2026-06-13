@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fetchReceipt } from "@/lib/receipt";
 import { ReceiptViewer } from "@/components/receipt-viewer";
+import { chainByKey } from "@/lib/chains";
 
 interface Props {
   params: Promise<{ hash: string }>;
@@ -10,8 +11,10 @@ export default async function ProofViewer({ params }: Props) {
   const { hash } = await params;
   const receipt = await fetchReceipt(hash);
   const storageScanUrl = "https://storagescan-galileo.0g.ai/submissions";
-  const vaultAddress = process.env.NEXT_PUBLIC_VAULT_ADDRESS ?? "";
-  const chainScanUrl = `https://chainscan-galileo.0g.ai/address/${vaultAddress}`;
+  const tradeChain = receipt ? chainByKey(receipt.chain.key) : undefined;
+  const vaultAddress = tradeChain?.vault ?? process.env.NEXT_PUBLIC_VAULT_ADDRESS ?? "";
+  const explorerBase = tradeChain?.explorerAddr ?? "https://chainscan-galileo.0g.ai/address/";
+  const chainScanUrl = `${explorerBase}${vaultAddress}`;
 
   return (
     <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
@@ -67,7 +70,7 @@ export default async function ProofViewer({ params }: Props) {
               rel="noreferrer"
               className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
             >
-              Vault on ChainScan ↗
+              Vault on explorer ↗
             </a>
           </div>
 
