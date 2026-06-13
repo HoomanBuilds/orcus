@@ -29,7 +29,7 @@ export function IntentStatusBanner({ lifecycle, receiptHash, txHash }: Props) {
         <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
         <div>
           <p className="text-sm font-medium text-[#16a34a]">Trade executed</p>
-          <p className="text-[11px] text-[#16a34a]/60 mt-0.5">Intent fulfilled via Jaine DEX</p>
+          <p className="text-[11px] text-[#16a34a]/60 mt-0.5">Intent fulfilled — settled on-chain</p>
         </div>
       </div>
       <div className="flex gap-3">
