@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { vaultAbi } from "@/lib/vaultAbi";
 import { useActiveChain } from "@/lib/active-chain";
-import { fetchSuiIntent, suiWithdrawTx } from "@/lib/sui";
+import { fetchSuiIntent, suiWithdrawTx, suiRequestCancelTx } from "@/lib/sui";
 import { CHAINS } from "@/lib/chains";
 import { ChainIcon, ChainBadge } from "@/components/chain-icon";
 import { useToast } from "@/components/toast";
@@ -43,9 +43,11 @@ export default function VaultPage() {
   const slippage = !isSui && isActive && evmIntent ? `${evmIntent[3].toString()} bps` : "—";
 
   const { writeContract, data: evmTx, isPending, error: writeError, reset: resetWrite } = useWriteContract();
+  const { writeContractAsync: writeCancelAsync } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: evmTx, chainId: activeChain.evmChainId });
   const [suiWithdrawing, setSuiWithdrawing] = useState(false);
   const [suiTx, setSuiTx] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (isSuccess && evmTx) { toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet", txHash: evmTx, explorerTx: activeChain.explorerTx }); refetchEvm(); resetWrite(); }
@@ -65,6 +67,22 @@ export default function VaultPage() {
     } else {
       writeContract({ abi: vaultAbi, address: activeChain.vault as `0x${string}`, functionName: "withdraw", chainId: activeChain.evmChainId });
     }
+  }
+
+  // Escape hatch: after the 1h cooldown the agent can no longer execute, so the user can safely withdraw.
+  async function requestCancel() {
+    try {
+      setCancelling(true);
+      if (isSui) {
+        await suiSignExec({ transaction: suiRequestCancelTx(activeChain) });
+        refetchSui();
+      } else {
+        await writeCancelAsync({ abi: vaultAbi, address: activeChain.vault as `0x${string}`, functionName: "requestCancel", chainId: activeChain.evmChainId });
+      }
+      toast({ type: "success", title: "Cancel requested", description: "Agent locked out after the cooldown — then withdraw" });
+    } catch (e) {
+      toast({ type: "error", title: "Request failed", description: e instanceof Error ? e.message.slice(0, 80) : "" });
+    } finally { setCancelling(false); }
   }
 
   if (!address) return <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}><WalletConnectPrompt page="vault" /></div>;
@@ -148,6 +166,13 @@ export default function VaultPage() {
                   {withdrawing ? "Withdrawing…" : "Withdraw all"}
                 </button>
                 <Link href="/strategy" className="px-5 py-2.5 text-sm text-black/50 rounded-xl border border-black/[0.07] hover:border-black/20 hover:text-black/80 transition-all">New intent</Link>
+                {isActive && (
+                  <button onClick={requestCancel} disabled={cancelling}
+                    className="px-5 py-2.5 text-sm rounded-xl border border-amber-200 text-amber-700 bg-amber-50/40 hover:bg-amber-100/60 transition-all"
+                    style={{ cursor: cancelling ? "not-allowed" : "pointer", opacity: cancelling ? 0.6 : 1 }}>
+                    {cancelling ? "Requesting…" : "Request cancel"}
+                  </button>
+                )}
                 {!hasBalance && <span className="text-xs text-black/30">No balance to withdraw</span>}
                 {withdrawTxUrl && <a href={withdrawTxUrl} target="_blank" rel="noreferrer" className="text-xs text-black/40 underline hover:text-black/70 transition-colors">View tx ↗</a>}
               </div>

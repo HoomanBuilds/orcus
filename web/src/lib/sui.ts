@@ -1,4 +1,5 @@
 import { Transaction } from "@mysten/sui/transactions";
+import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import type { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import type { ChainMeta } from "./chains";
 
@@ -36,6 +37,13 @@ export function suiWithdrawTx(chain: ChainMeta): Transaction {
   if (!chain.sui) throw new Error("not a Sui chain");
   const tx = new Transaction();
   tx.moveCall({ target: `${chain.sui.packageId}::vault::withdraw`, arguments: [tx.object(chain.vault)] });
+  return tx;
+}
+
+export function suiRequestCancelTx(chain: ChainMeta): Transaction {
+  if (!chain.sui) throw new Error("not a Sui chain");
+  const tx = new Transaction();
+  tx.moveCall({ target: `${chain.sui.packageId}::vault::request_cancel`, arguments: [tx.object(chain.vault), tx.object(SUI_CLOCK_OBJECT_ID)] });
   return tx;
 }
 
