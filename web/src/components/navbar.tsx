@@ -5,10 +5,10 @@ import { ChainSelector } from "./chain-selector";
 import { OrcusConnectButton } from "./connect-button";
 
 const NAV_LINKS = [
-  { label: "Protocol", href: "#platform" },
-  { label: "Security", href: "#security" },
-  { label: "Build",    href: "#devex" },
-  { label: "Live",     href: "#live" },
+  { label: "Protocol", href: "/#platform" },
+  { label: "Security", href: "/#security" },
+  { label: "Build",    href: "/#devex" },
+  { label: "Live",     href: "/#live" },
 ];
 
 const NAV_STYLE: React.CSSProperties = {
