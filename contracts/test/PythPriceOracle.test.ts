@@ -58,7 +58,6 @@ async function buildUpdateData(
 }
 
 describe("PythPriceOracle", () => {
-  // ── constructor ──────────────────────────────────────────────────────────
   it("reverts on zero pyth address", async () => {
     const Oracle = await ethers.getContractFactory("PythPriceOracle");
     await expect(
@@ -82,7 +81,6 @@ describe("PythPriceOracle", () => {
     ).to.be.revertedWith("zero maxAge");
   });
 
-  // ── updatePrice forwards to Pyth ─────────────────────────────────────────
   it("updatePrice forwards VAA and subsequent getExpectedOut returns value", async () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(baseFixture);
     const now = await time.latest();
@@ -103,7 +101,6 @@ describe("PythPriceOracle", () => {
     expect(out).to.equal(300000n);
   });
 
-  // ── 18-dec tokenIn -> 6-dec tokenOut (H-05 decimals check) ──────────────
   it("18->6 dec: price=0.3 USD, amountIn=1e18 -> expectedOut=300000", async () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(baseFixture);
     const now = await time.latest();
@@ -123,7 +120,6 @@ describe("PythPriceOracle", () => {
     expect(out).to.equal(300000n);
   });
 
-  // ── 18-dec tokenIn -> 18-dec tokenOut ────────────────────────────────────
   it("18->18 dec: price=0.3 USD, amountIn=2e18 -> expectedOut=6e17", async () => {
     const { pyth, oracle, tokenIn18, tokenOut18 } = await loadFixture(baseFixture);
     const now = await time.latest();
@@ -143,7 +139,6 @@ describe("PythPriceOracle", () => {
     expect(out).to.equal(ethers.parseUnits("0.6", 18));
   });
 
-  // ── staleness - uses loadFixture so time.increase is rolled back afterward ──
   it("getExpectedOut reverts with StalePrice after maxAge", async () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(staleFixture);
     const now = await time.latest();
@@ -164,7 +159,6 @@ describe("PythPriceOracle", () => {
     ).to.be.revertedWithCustomError(pyth, "StalePrice");
   });
 
-  // ── positive expo ────────────────────────────────────────────────────────
   it("positive expo: price=3, expo=0 (multiplied by 10^0), 18->6 dec", async () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(baseFixture);
     const now = await time.latest();
