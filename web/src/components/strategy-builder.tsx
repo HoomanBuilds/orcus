@@ -6,7 +6,7 @@ const FIELD = "rounded-xl border border-black/10 bg-white px-3 py-2 text-[13px] 
 const LABEL = "text-[10px] tracking-[0.14em] uppercase text-black/30";
 const DATA = { fontFamily: "var(--font-data)" } as const;
 
-export interface BuilderState { conditions: Condition[]; logic: "AND" | "OR"; notes?: string; valid: boolean }
+export interface BuilderState { conditions: Condition[]; logic: "AND" | "OR"; notes?: string; immediate: boolean; valid: boolean }
 
 function condText(c: Condition): string {
   const left = c.indicator === "rsi" || c.indicator === "ma" ? `${c.indicator.toUpperCase()}(${c.period ?? (c.indicator === "rsi" ? 14 : 60)})` : c.indicator;
@@ -26,20 +26,29 @@ export function StrategyBuilder({ onChange }: { onChange: (s: BuilderState) => v
   const [chat, setChat] = useState("");
   const [parsing, setParsing] = useState(false);
   const [parseMsg, setParseMsg] = useState<string | null>(null);
+  const [interpreted, setInterpreted] = useState(false);
 
   useEffect(() => {
-    onChange({ conditions, logic, notes: chat.trim() || undefined, valid: condsValid(conditions) });
-  }, [conditions, logic, chat, onChange]);
+    /* simple is valid once interpreted (conditions OR an immediate swap); advanced needs >=1 condition */
+    const valid = mode === "advanced" ? condsValid(conditions) : interpreted;
+    const immediate = valid && conditions.length === 0;
+    onChange({ conditions, logic, notes: chat.trim() || undefined, immediate, valid });
+  }, [conditions, logic, chat, mode, interpreted, onChange]);
+
+  function editChat(v: string) { setChat(v); setInterpreted(false); setParseMsg(null); }
+  function switchMode(m: "simple" | "advanced") { setMode(m); if (m === "simple") setInterpreted(false); }
 
   async function interpret() {
     if (!chat.trim()) return;
     setParsing(true); setParseMsg(null);
     try {
       const res = await fetch("/api/parse-strategy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: chat }) });
-      const data = (await res.json()) as { conditions: Condition[]; logic: "AND" | "OR"; error?: string };
-      if (!data.conditions?.length) { setParseMsg(`Couldn't interpret${data.error ? ` (${data.error})` : ""} - rephrase or use Advanced.`); return; }
-      setConditions(data.conditions); setLogic(data.logic);
-    } catch { setParseMsg("Interpret failed - try again or use Advanced."); }
+      const data = (await res.json()) as { conditions?: Condition[]; logic?: "AND" | "OR"; error?: string };
+      if (!res.ok || data.error) { setParseMsg(`Couldn't interpret${data.error ? ` (${data.error})` : ""}, rephrase or use Advanced.`); return; }
+      setConditions(data.conditions ?? []);
+      setLogic(data.logic === "OR" ? "OR" : "AND");
+      setInterpreted(true);
+    } catch { setParseMsg("Interpret failed, try again or use Advanced."); }
     finally { setParsing(false); }
   }
 
@@ -51,7 +60,7 @@ export function StrategyBuilder({ onChange }: { onChange: (s: BuilderState) => v
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-2">
         {(["simple", "advanced"] as const).map((m) => (
-          <button key={m} type="button" onClick={() => setMode(m)} className="rounded-xl border p-3 text-left transition-all"
+          <button key={m} type="button" onClick={() => switchMode(m)} className="rounded-xl border p-3 text-left transition-all"
             style={{ border: mode === m ? "1px solid rgba(0,0,0,0.25)" : "1px solid rgba(0,0,0,0.07)", background: mode === m ? "rgba(0,0,0,0.04)" : "white", cursor: "pointer" }}>
             <p className="text-[13px] font-medium text-[#111]">{m === "simple" ? "Simple - describe it" : "Advanced - indicators"}</p>
             <p className="text-[11px] text-black/35 mt-0.5">{m === "simple" ? "Chat in plain English" : "Specify conditions exactly"}</p>
@@ -61,17 +70,19 @@ export function StrategyBuilder({ onChange }: { onChange: (s: BuilderState) => v
 
       {mode === "simple" && (
         <div className="flex flex-col gap-2">
-          <textarea rows={3} value={chat} onChange={(e) => setChat(e.target.value)}
-            placeholder="e.g. buy when RSI dips under 30 and the price is below the 1h moving average"
+          <textarea rows={3} value={chat} onChange={(e) => editChat(e.target.value)}
+            placeholder="e.g. buy when RSI dips under 30 and price is below the 1h moving average, or just 'swap now'"
             className="w-full rounded-xl border border-black/10 bg-white p-4 text-[13px] leading-relaxed resize-none outline-none focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]" style={{ color: "#111" }} />
           <button type="button" onClick={interpret} disabled={!chat.trim() || parsing} className="self-start rounded-xl border border-black/15 px-4 py-2 text-[12px] text-[#111] hover:bg-black/[0.03] transition-colors" style={{ opacity: !chat.trim() || parsing ? 0.5 : 1 }}>
             {parsing ? "Interpreting…" : "Interpret"}
           </button>
           {parseMsg && <p className="text-[11px] text-red-500">{parseMsg}</p>}
-          {conditions.length > 0 && (
+          {interpreted && (
             <div className="rounded-xl border border-black/[0.07] bg-black/[0.015] p-4">
               <p className={`${LABEL} mb-2`} style={DATA}>Here&apos;s what I understood</p>
-              <p className="text-[13px] text-[#111]" style={DATA}>Execute when {conditions.map(condText).join(` ${logic} `)}</p>
+              <p className="text-[13px] text-[#111]" style={DATA}>
+                {conditions.length > 0 ? `Execute when ${conditions.map(condText).join(` ${logic} `)}` : "Execute immediately (no indicator conditions)"}
+              </p>
             </div>
           )}
         </div>
@@ -114,7 +125,7 @@ export function StrategyBuilder({ onChange }: { onChange: (s: BuilderState) => v
           <details className="mt-1">
             <summary className="text-[11px] text-black/40 cursor-pointer hover:text-black/70">Optional: pre-fill from a sentence</summary>
             <div className="flex items-center gap-2 mt-2">
-              <input value={chat} onChange={(e) => setChat(e.target.value)} placeholder="describe, then Pre-fill" className={`${FIELD} flex-1`} style={{ color: "#111" }} />
+              <input value={chat} onChange={(e) => editChat(e.target.value)} placeholder="describe, then Pre-fill" className={`${FIELD} flex-1`} style={{ color: "#111" }} />
               <button type="button" onClick={interpret} disabled={!chat.trim() || parsing} className="rounded-xl border border-black/15 px-3 py-2 text-[12px]" style={{ opacity: !chat.trim() || parsing ? 0.5 : 1 }}>{parsing ? "…" : "Pre-fill"}</button>
             </div>
             {parseMsg && <p className="text-[11px] text-red-500 mt-1">{parseMsg}</p>}

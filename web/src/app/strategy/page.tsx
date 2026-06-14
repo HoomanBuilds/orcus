@@ -63,7 +63,7 @@ export default function StrategyPage() {
   const dec = activeChain.nativeDecimals;
   const sym = activeChain.nativeSymbol;
 
-  const [builderState, setBuilderState] = useState<BuilderState>({ conditions: [], logic: "AND", valid: false });
+  const [builderState, setBuilderState] = useState<BuilderState>({ conditions: [], logic: "AND", immediate: false, valid: false });
   const [amount, setAmount] = useState("0.01");
   const [slippage, setSlippage] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -128,14 +128,18 @@ export default function StrategyPage() {
     setErrMsg(null);
     try {
       setPhase("encrypting");
-      const strategy: Strategy = {
-        version: 1,
-        conditions: builderState.conditions,
-        logic: builderState.logic,
-        notes: builderState.notes,
-        trade: { inputAsset: erc20 ? tokenAddr : "native", amountIn: amount, outputToken: "oUSDC", slippageBps: Number(slippage) || 0 },
-      };
-      const ciphertext = encryptIntentBrowser(AGENT_PUB, strategy);
+      /* immediate swap (no conditions) goes as a free-text goal so the TEE decides; a
+         conditional strategy goes as the typed schema the agent evaluates in code */
+      const payload: Strategy | { goal: string } = builderState.immediate
+        ? { goal: builderState.notes || "swap now" }
+        : {
+            version: 1,
+            conditions: builderState.conditions,
+            logic: builderState.logic,
+            notes: builderState.notes,
+            trade: { inputAsset: erc20 ? tokenAddr : "native", amountIn: amount, outputToken: "oUSDC", slippageBps: Number(slippage) || 0 },
+          };
+      const ciphertext = encryptIntentBrowser(AGENT_PUB, payload);
       setCipher(ciphertext.slice(0, 96) + "...");
       await new Promise((r) => setTimeout(r, 350));
       setCipher(null);
