@@ -30,7 +30,7 @@ function leftValue(c: Condition, ind: Indicators): number | null {
     case "price": return ind.price;
     case "volatility": return ind.volatility;
     case "change24h": return ind.change24h;
-    case "trend": return null; // qualitative — not code-evaluable; left to notes/AI
+    case "trend": return null; // qualitative - not code-evaluable; left to notes/AI
   }
 }
 

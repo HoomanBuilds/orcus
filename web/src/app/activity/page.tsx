@@ -49,7 +49,7 @@ export default function ActivityPage() {
             <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(255,255,255,0.97) 0%, rgba(255,255,255,0.6) 55%, transparent 100%)" }} />
             <div className="relative z-10 p-8">
               <p className="text-[11px] tracking-[0.16em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Execution stack</p>
-              <h2 className="mt-2 text-2xl font-light text-[#111]">ECIES-256 → Intel TDX → Orcus router → 0G Storage</h2>
+              <h2 className="mt-2 text-2xl font-light text-[#111]">ECIES-256 · Intel TDX · Orcus router · 0G Storage</h2>
               <p className="mt-2 text-sm text-black/40">Every execution on this feed passed through all four sealed layers.</p>
             </div>
           </div>
@@ -81,8 +81,8 @@ export default function ActivityPage() {
                   <Link href={`/proof/${ex.receiptHash}`} className="text-[12px] text-black/50 hover:text-black/80 transition-colors overflow-hidden text-ellipsis whitespace-nowrap block underline" style={{ fontFamily: "var(--font-data)" }}>
                     {ex.receiptHash.slice(0, 14)}…{ex.receiptHash.slice(-6)}
                   </Link>
-                  <a href={`${c?.explorerTx ?? ""}${ex.txHash}`} target="_blank" rel="noreferrer" className="text-[12px] text-black/40 hover:text-black/70 transition-colors underline" style={{ fontFamily: "var(--font-data)" }}>tx ↗</a>
-                  <Link href={`/proof/${ex.receiptHash}`} className="text-[12px] text-black/25 hover:text-black/55 transition-colors underline" style={{ fontFamily: "var(--font-data)" }}>proof ↗</Link>
+                  <a href={`${c?.explorerTx ?? ""}${ex.txHash}`} target="_blank" rel="noreferrer" className="text-[12px] text-black/40 hover:text-black/70 transition-colors underline" style={{ fontFamily: "var(--font-data)" }}>tx</a>
+                  <Link href={`/proof/${ex.receiptHash}`} className="text-[12px] text-black/25 hover:text-black/55 transition-colors underline" style={{ fontFamily: "var(--font-data)" }}>proof</Link>
                 </div>
               );
             })}

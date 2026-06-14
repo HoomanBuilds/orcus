@@ -198,7 +198,7 @@ describe("StrategyVault: slippage floor (C-02, H-04, H-07)", () => {
     const deadline = Math.floor(Date.now() / 1000) + 300;
     const p = {
       user: user.address, tokenOut: await usdc.getAddress(), fee: FEE,
-      agentMinOut: value, // demand 1:1 — impossible at 0.5x
+      agentMinOut: value, // demand 1:1 - impossible at 0.5x
       deadline, receiptHash: ethers.id("r1"), nonce: 0n,
     };
     const sig = await signExec(vault, agent, p);

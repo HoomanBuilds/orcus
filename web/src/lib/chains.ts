@@ -1,4 +1,4 @@
-// Frontend chain registry — single source of truth for the multi-chain UI.
+// Frontend chain registry - single source of truth for the multi-chain UI.
 // Mirrors the agent's deployed stack (verified on-chain 2026-06-13). Addresses are
 // public + immutable per deployment, so they live here rather than in env sprawl.
 

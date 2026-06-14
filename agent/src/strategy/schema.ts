@@ -1,4 +1,4 @@
-// Typed strategy schema — the structured intent a user encrypts and deposits.
+// Typed strategy schema - the structured intent a user encrypts and deposits.
 // Shared shape with web/src/lib/strategy-schema.ts (kept in sync manually; no monorepo).
 
 export type Op = "lt" | "gt" | "lte" | "gte" | "below" | "above" | "crossesAbove" | "crossesBelow";

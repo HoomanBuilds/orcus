@@ -49,7 +49,7 @@ export default async function ProofViewer({ params }: Props) {
                 Receipt
               </p>
               <p className="text-sm text-black/45 leading-relaxed">
-                Not yet retrievable from 0G Storage — it may still be propagating across storage nodes, or this root predates the current deployment. The merkle root above is the on-chain proof; the full JSON renders here once the file is indexed.
+                Not yet retrievable from 0G Storage - it may still be propagating across storage nodes, or this root predates the current deployment. The merkle root above is the on-chain proof; the full JSON renders here once the file is indexed.
               </p>
             </div>
           )}
@@ -62,7 +62,7 @@ export default async function ProofViewer({ params }: Props) {
               rel="noreferrer"
               className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
             >
-              0G StorageScan ↗
+              0G StorageScan
             </a>
             <a
               href={chainScanUrl}
@@ -70,7 +70,7 @@ export default async function ProofViewer({ params }: Props) {
               rel="noreferrer"
               className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
             >
-              Vault on explorer ↗
+              Vault on explorer
             </a>
           </div>
 
@@ -101,7 +101,7 @@ export default async function ProofViewer({ params }: Props) {
               TEE attestation
             </p>
             <p className="text-sm text-black/45 leading-relaxed">
-              The TEE inference runs inside an Intel TDX enclave via 0G Compute. Full DCAP attestation verification is post-MVP — the sealed execution guarantee is enforced by the 0G Compute network.
+              The TEE inference runs inside an Intel TDX enclave via 0G Compute. Full DCAP attestation verification is post-MVP - the sealed execution guarantee is enforced by the 0G Compute network.
             </p>
           </div>
 

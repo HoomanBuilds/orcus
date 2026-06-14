@@ -103,7 +103,7 @@ export default function StrategyPage() {
 
   const balance = isSui ? (suiIntent?.amountMist ?? 0n) : ((evmIntent?.[2] ?? 0n) as bigint);
   const hasActive = isSui ? (suiIntent?.active ?? false) : (evmIntent?.[4] === true);
-  const slippageDisplay = !isSui && hasActive && evmIntent ? `${evmIntent[3].toString()} bps` : "—";
+  const slippageDisplay = !isSui && hasActive && evmIntent ? `${evmIntent[3].toString()} bps` : "-";
 
   // Effective input asset (native vs ERC20).
   const effDec = erc20 ? Number(tokenDecimals ?? 18) : dec;
@@ -181,19 +181,19 @@ export default function StrategyPage() {
 
   const submitLabel = () => {
     if (!address)               return "Connect wallet first";
-    if (hasActive)              return "Active intent — withdraw first";
+    if (hasActive)              return "Active intent - withdraw first";
     if (erc20 && !validToken)   return "Enter a valid token address";
     if (phase === "encrypting") return "Encrypting intent…";
     if (phase === "approving")  return `Approving ${effSym}…`;
     if (phase === "submitting") return "Confirm in wallet…";
     if (phase === "done")       return "Intent submitted ✓";
-    return `${needsApprove ? "Approve & submit" : "Encrypt & submit"}  ↗  ${effSym} → oUSDC`;
+    return `${needsApprove ? "Approve & submit" : "Encrypt & submit"} ${effSym} to oUSDC`;
   };
 
   const STEPS = [
     { n: "01", label: "ENCRYPT",  desc: "ECIES-256 in-browser",       done: phase !== "idle" },
     { n: "02", label: "SUBMIT",   desc: `Sealed intent on ${activeChain.shortLabel}`, done: phase === "submitting" || phase === "done" || phase === "error" },
-    { n: "03", label: "EXECUTE",  desc: "Intel TDX → Orcus router",   done: phase === "done" },
+    { n: "03", label: "EXECUTE",  desc: "Intel TDX to Orcus router",   done: phase === "done" },
   ];
 
   if (!address) {
@@ -288,12 +288,12 @@ export default function StrategyPage() {
                 ))}
                 {hasActive && (
                   <div className="px-5 py-3 bg-amber-50/50 border-t border-amber-100">
-                    <p className="text-[11px] text-amber-700">Intent active — withdraw to set a new one</p>
+                    <p className="text-[11px] text-amber-700">Intent active - withdraw to set a new one</p>
                   </div>
                 )}
               </Card>
               <Card className="flex-1 flex items-center justify-center p-8">
-                <Link href="/dashboard" className="text-sm text-black/40 hover:text-black/70 transition-colors">View executions on Dashboard →</Link>
+                <Link href="/dashboard" className="text-sm text-black/40 hover:text-black/70 transition-colors">View executions on Dashboard</Link>
               </Card>
             </div>
 
@@ -376,7 +376,7 @@ export default function StrategyPage() {
                 {phase === "done" && txHash && (
                   <div className="rounded-xl border border-[#16a34a]/20 bg-[#16a34a]/[0.04] p-4 text-[12px] text-[#16a34a] leading-relaxed">
                     Intent submitted. TEE agent will pick it up shortly.
-                    <a href={`${activeChain.explorerTx}${txHash}`} target="_blank" rel="noreferrer" className="underline ml-1">View tx ↗</a>
+                    <a href={`${activeChain.explorerTx}${txHash}`} target="_blank" rel="noreferrer" className="underline ml-1">View tx</a>
                   </div>
                 )}
                 {phase === "error" && errMsg && (

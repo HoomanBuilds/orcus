@@ -59,7 +59,7 @@ export default function HistoryPage() {
               <div className="w-12 h-12 rounded-full border border-black/[0.07] bg-black/[0.02] flex items-center justify-center"><span className="text-black/20">0</span></div>
               <p className="text-sm text-black/35">No trades executed yet{vm === "evm" ? " across your EVM chains" : " on Sui"}</p>
               <Link href="/strategy" className="mt-2 inline-flex items-center gap-1 text-xs text-black/40 border border-black/[0.07] rounded-xl px-4 py-2 hover:border-black/20 hover:text-black/70 transition-all">
-                Set your first intent →
+                Set your first intent
               </Link>
             </div>
           )}
@@ -84,10 +84,10 @@ export default function HistoryPage() {
                     </Link>
                     <a href={`${c?.explorerTx ?? ""}${row.txHash}`} target="_blank" rel="noreferrer"
                       className="text-[12px] text-black/40 hover:text-black/70 transition-colors underline" style={{ fontFamily: "var(--font-data)" }}>
-                      {row.txHash.slice(0, 8)}… ↗
+                      {row.txHash.slice(0, 8)}…
                     </a>
                     <Link href={`/proof/${row.receiptHash}`} className="inline-flex items-center gap-1 text-[12px] text-black/30 hover:text-black/60 transition-colors" style={{ fontFamily: "var(--font-data)" }}>
-                      View ↗
+                      View
                     </Link>
                   </div>
                 );

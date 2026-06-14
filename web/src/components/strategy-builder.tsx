@@ -37,9 +37,9 @@ export function StrategyBuilder({ onChange }: { onChange: (s: BuilderState) => v
     try {
       const res = await fetch("/api/parse-strategy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: chat }) });
       const data = (await res.json()) as { conditions: Condition[]; logic: "AND" | "OR"; error?: string };
-      if (!data.conditions?.length) { setParseMsg(`Couldn't interpret${data.error ? ` (${data.error})` : ""} — rephrase or use Advanced.`); return; }
+      if (!data.conditions?.length) { setParseMsg(`Couldn't interpret${data.error ? ` (${data.error})` : ""} - rephrase or use Advanced.`); return; }
       setConditions(data.conditions); setLogic(data.logic);
-    } catch { setParseMsg("Interpret failed — try again or use Advanced."); }
+    } catch { setParseMsg("Interpret failed - try again or use Advanced."); }
     finally { setParsing(false); }
   }
 
@@ -53,7 +53,7 @@ export function StrategyBuilder({ onChange }: { onChange: (s: BuilderState) => v
         {(["simple", "advanced"] as const).map((m) => (
           <button key={m} type="button" onClick={() => setMode(m)} className="rounded-xl border p-3 text-left transition-all"
             style={{ border: mode === m ? "1px solid rgba(0,0,0,0.25)" : "1px solid rgba(0,0,0,0.07)", background: mode === m ? "rgba(0,0,0,0.04)" : "white", cursor: "pointer" }}>
-            <p className="text-[13px] font-medium text-[#111]">{m === "simple" ? "Simple — describe it" : "Advanced — indicators"}</p>
+            <p className="text-[13px] font-medium text-[#111]">{m === "simple" ? "Simple - describe it" : "Advanced - indicators"}</p>
             <p className="text-[11px] text-black/35 mt-0.5">{m === "simple" ? "Chat in plain English" : "Specify conditions exactly"}</p>
           </button>
         ))}
@@ -65,7 +65,7 @@ export function StrategyBuilder({ onChange }: { onChange: (s: BuilderState) => v
             placeholder="e.g. buy when RSI dips under 30 and the price is below the 1h moving average"
             className="w-full rounded-xl border border-black/10 bg-white p-4 text-[13px] leading-relaxed resize-none outline-none focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]" style={{ color: "#111" }} />
           <button type="button" onClick={interpret} disabled={!chat.trim() || parsing} className="self-start rounded-xl border border-black/15 px-4 py-2 text-[12px] text-[#111] hover:bg-black/[0.03] transition-colors" style={{ opacity: !chat.trim() || parsing ? 0.5 : 1 }}>
-            {parsing ? "Interpreting…" : "Interpret →"}
+            {parsing ? "Interpreting…" : "Interpret"}
           </button>
           {parseMsg && <p className="text-[11px] text-red-500">{parseMsg}</p>}
           {conditions.length > 0 && (

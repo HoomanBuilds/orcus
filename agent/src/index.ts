@@ -44,7 +44,7 @@ async function main() {
   // Watchdog
   setInterval(async () => {
     try { await provider.getBlockNumber(); }
-    catch (e) { err("watchdog", "RPC unreachable — exiting for restart", e); process.exit(1); }
+    catch (e) { err("watchdog", "RPC unreachable - exiting for restart", e); process.exit(1); }
   }, 30_000);
 
   const inFlight = new Set<string>();
@@ -95,7 +95,7 @@ async function main() {
       log("tee", `action=${action} reason="${reason}"`);
 
       if (action !== "EXECUTE") {
-        log("decision", "WAIT — skipping execution");
+        log("decision", "WAIT - skipping execution");
         return;
       }
 

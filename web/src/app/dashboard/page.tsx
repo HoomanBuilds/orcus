@@ -98,7 +98,7 @@ function DashboardContent() {
 
   const balance = isSui ? (suiIntent?.amountMist ?? 0n) : ((evmIntent?.[2] ?? 0n) as bigint);
   const isActive = isSui ? (suiIntent?.active ?? false) : (evmIntent?.[4] === true);
-  const slippage = !isSui && isActive && evmIntent ? `${evmIntent[3].toString()} bps` : "—";
+  const slippage = !isSui && isActive && evmIntent ? `${evmIntent[3].toString()} bps` : "-";
 
   // EVM withdraw.
   const { writeContract, data: evmTx, isPending, error: writeError, reset: resetWrite } = useWriteContract();
@@ -217,7 +217,7 @@ function DashboardContent() {
                     {withdrawing ? "Withdrawing…" : "Withdraw all"}
                   </button>
                   <Link href="/strategy" className="px-5 py-2 text-sm text-black/50 rounded-xl border border-black/[0.07] hover:border-black/20 hover:text-black/80 transition-all">New intent</Link>
-                  {withdrawTxUrl && <a href={withdrawTxUrl} target="_blank" rel="noreferrer" className="text-xs text-black/40 underline hover:text-black/70 transition-colors">View tx ↗</a>}
+                  {withdrawTxUrl && <a href={withdrawTxUrl} target="_blank" rel="noreferrer" className="text-xs text-black/40 underline hover:text-black/70 transition-colors">View tx</a>}
                   {writeError && <p className="text-xs text-red-500 ml-2">{writeError.message.slice(0, 60)}</p>}
                 </div>
               </Card>
@@ -264,7 +264,7 @@ function DashboardContent() {
 
           {/* Supported chains */}
           <div>
-            <p className="text-[10px] tracking-[0.16em] uppercase text-black/30 mb-4" style={{ fontFamily: "var(--font-data)" }}>Supported chains — one sealed agent, six deployments</p>
+            <p className="text-[10px] tracking-[0.16em] uppercase text-black/30 mb-4" style={{ fontFamily: "var(--font-data)" }}>Supported chains - one sealed agent, six deployments</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
               {CHAINS.map((c) => (
                 <a key={c.key} href={`${c.explorerAddr}${c.vault}`} target="_blank" rel="noreferrer"

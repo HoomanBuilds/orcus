@@ -40,7 +40,7 @@ export default function VaultPage() {
 
   const balance = isSui ? (suiIntent?.amountMist ?? 0n) : ((evmIntent?.[2] ?? 0n) as bigint);
   const isActive = isSui ? (suiIntent?.active ?? false) : (evmIntent?.[4] === true);
-  const slippage = !isSui && isActive && evmIntent ? `${evmIntent[3].toString()} bps` : "—";
+  const slippage = !isSui && isActive && evmIntent ? `${evmIntent[3].toString()} bps` : "-";
 
   const { writeContract, data: evmTx, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { writeContractAsync: writeCancelAsync } = useWriteContract();
@@ -79,7 +79,7 @@ export default function VaultPage() {
       } else {
         await writeCancelAsync({ abi: vaultAbi, address: activeChain.vault as `0x${string}`, functionName: "requestCancel", chainId: activeChain.evmChainId });
       }
-      toast({ type: "success", title: "Cancel requested", description: "Agent locked out after the cooldown — then withdraw" });
+      toast({ type: "success", title: "Cancel requested", description: "Agent locked out after the cooldown - then withdraw" });
     } catch (e) {
       toast({ type: "error", title: "Request failed", description: e instanceof Error ? e.message.slice(0, 80) : "" });
     } finally { setCancelling(false); }
@@ -107,7 +107,7 @@ export default function VaultPage() {
               <ChainBadge chainKey={activeChain.key} />
               <a href={`${activeChain.explorerAddr}${activeChain.vault}`} target="_blank" rel="noreferrer"
                 className="text-[11px] text-black/30 hover:text-black/60 transition-colors underline" style={{ fontFamily: "var(--font-data)" }}>
-                {`${activeChain.vault.slice(0, 8)}…${activeChain.vault.slice(-6)} ↗`}
+                {`${activeChain.vault.slice(0, 8)}…${activeChain.vault.slice(-6)}`}
               </a>
             </div>
           </div>
@@ -133,7 +133,7 @@ export default function VaultPage() {
               <div className="relative z-10 p-6">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-widest text-black/40 border border-black/[0.07]">NON-CUSTODIAL</span>
                 <h3 className="mt-3 text-lg font-light text-[#111]">Only you can withdraw.</h3>
-                <p className="mt-1 text-sm text-black/40 leading-relaxed">The vault enforces an escape hatch — the agent cannot touch your funds after you request cancel.</p>
+                <p className="mt-1 text-sm text-black/40 leading-relaxed">The vault enforces an escape hatch - the agent cannot touch your funds after you request cancel.</p>
               </div>
             </div>
 
@@ -152,7 +152,7 @@ export default function VaultPage() {
                   { label: "Vault", value: `${activeChain.vault.slice(0, 12)}…${activeChain.vault.slice(-6)}` },
                   { label: "Your address", value: `${address.slice(0, 12)}…${address.slice(-6)}` },
                   { label: "Deposited", value: `${(+formatUnits(balance, dec)).toFixed(6)} ${sym}` },
-                  ...(slippage !== "—" ? [{ label: "Max slippage", value: slippage }] : []),
+                  ...(slippage !== "-" ? [{ label: "Max slippage", value: slippage }] : []),
                 ].map((f) => (
                   <div key={f.label} className="flex justify-between items-center px-6 py-4">
                     <span className="text-sm text-black/40">{f.label}</span>
@@ -174,7 +174,7 @@ export default function VaultPage() {
                   </button>
                 )}
                 {!hasBalance && <span className="text-xs text-black/30">No balance to withdraw</span>}
-                {withdrawTxUrl && <a href={withdrawTxUrl} target="_blank" rel="noreferrer" className="text-xs text-black/40 underline hover:text-black/70 transition-colors">View tx ↗</a>}
+                {withdrawTxUrl && <a href={withdrawTxUrl} target="_blank" rel="noreferrer" className="text-xs text-black/40 underline hover:text-black/70 transition-colors">View tx</a>}
               </div>
               {writeError && <div className="mx-6 mb-5 rounded-xl border border-red-200 bg-red-50/50 px-4 py-3"><p className="text-xs text-red-600">{writeError.message}</p></div>}
             </div>

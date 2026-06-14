@@ -14,7 +14,7 @@ const VIEM_CHAINS: Record<string, Chain> = {
 };
 
 // Public testnet RPCs cap eth_getLogs ranges (Base Sepolia rejects >10k), so we scan
-// in chunks newest-first over a bounded lookback — mirrors the agent's chunked scan.
+// in chunks newest-first over a bounded lookback - mirrors the agent's chunked scan.
 const LOOKBACK = 20_000n;
 const CHUNK = 5_000n;
 

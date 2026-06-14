@@ -180,7 +180,7 @@ const DEVEX_STEPS: { num: string; title: string; desc: string; file: string; cod
       { type: "keyword", text: "const", after: " receipt ", keyword2: "=", keyword3: " await ", fn: "indexer.getFileInfo", args: "(receiptHash)" },
       { type: "gap" },
       { type: "success", text: "✓ Receipt verified on 0G Storage" },
-      { type: "output", text: "  → root hash committed on-chain forever" },
+      { type: "output", text: "  root hash committed on-chain forever" },
     ],
   },
 ];
@@ -232,7 +232,7 @@ export default function Home() {
   const [ctaEmail, setCtaEmail] = useState("");
   const [ctaSubmitted, setCtaSubmitted] = useState(false);
 
-  // Captured at render time — before any effects mutate _introPlayed
+  // Captured at render time - before any effects mutate _introPlayed
   const willPlayIntro = useRef(!_introPlayed);
 
   const handleIntroDone = useCallback(() => setHeroReady(true), []);
@@ -581,7 +581,7 @@ export default function Home() {
                 <div>
                   <p className="text-xs text-black/40 tracking-widest uppercase mb-1">Protocol</p>
                   <h3 className="text-2xl font-light">End-to-end sealed pipeline</h3>
-                  <p className="text-sm text-black/45 mt-2 leading-relaxed max-w-xs">From browser encryption to on-chain proof — no plaintext is ever exposed across any hop.</p>
+                  <p className="text-sm text-black/45 mt-2 leading-relaxed max-w-xs">From browser encryption to on-chain proof - no plaintext is ever exposed across any hop.</p>
                 </div>
               </div>
             </BentoCard>
@@ -635,7 +635,7 @@ export default function Home() {
                 {
                   label: "ECIES-256",
                   title: "Asymmetric encryption",
-                  desc: "Your intent is encrypted with the vault's public key in-browser. Only the TEE enclave — never the vault contract, never us — holds the private key to decrypt it.",
+                  desc: "Your intent is encrypted with the vault's public key in-browser. Only the TEE enclave - never the vault contract, never us - holds the private key to decrypt it.",
                   delay: 0,
                 },
                 {
@@ -653,7 +653,7 @@ export default function Home() {
                 {
                   label: "MEV Shield",
                   title: "Structural front-run immunity",
-                  desc: "Encrypted intents are unreadable to block builders, searchers, and validators. The sealed pool means your trade strategy is structurally protected — not just hoped-for.",
+                  desc: "Encrypted intents are unreadable to block builders, searchers, and validators. The sealed pool means your trade strategy is structurally protected - not just hoped-for.",
                   delay: 240,
                 },
               ].map((item) => (

@@ -1,4 +1,4 @@
-// Typed strategy schema — mirrors agent/src/strategy/schema.ts (kept in sync manually).
+// Typed strategy schema - mirrors agent/src/strategy/schema.ts (kept in sync manually).
 
 export type Op = "lt" | "gt" | "lte" | "gte" | "below" | "above" | "crossesAbove" | "crossesBelow";
 export type Indicator = "rsi" | "ma" | "price" | "volatility" | "trend" | "change24h";

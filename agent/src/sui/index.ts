@@ -88,7 +88,7 @@ async function main() {
     inFlight.add(user);
     try {
       const goalHex = await readEncryptedGoalHex(user);
-      if (!goalHex) { log("intent", `${user} has no active intent (settled) — skip`); return; }
+      if (!goalHex) { log("intent", `${user} has no active intent (settled) - skip`); return; }
       log("intent", `user=${user} amount=${amountIn}`);
 
       const plain = decryptIntent<{ goal: string; tokenOut?: string }>(env.agentEciesSk, goalHex);
@@ -100,7 +100,7 @@ async function main() {
 
       const decision = await sealedDecide(zgServiceUrl, zgApiSecret, zgModel, JSON.stringify(plain), market);
       log("tee", `action=${decision.action} reason="${decision.reason}"`);
-      if (decision.action !== "EXECUTE") { log("tee", "WAIT — skipping execution"); return; }
+      if (decision.action !== "EXECUTE") { log("tee", "WAIT - skipping execution"); return; }
 
       const price = Number(mkt.price ?? 0);
       if (!(price > 0)) throw new Error("no price for SUI/USD");

@@ -73,7 +73,7 @@ This is not a theoretical design. The repository contains a working end-to-end f
 The user composes a strategy in the web dashboard. Before it leaves the browser, it is encrypted using ECIES-256 with the agent's public key. The ciphertext is submitted to the Strategy Vault alongside a deposit of the native token - all in a single transaction.
 
 ```
-User strategy  →  ECIES-256 encrypt in browser  →  0x04a9...bf96a1...ca2659 (opaque)
+User strategy, ECIES-256 encrypted in the browser, becomes 0x04a9...bf96a1...ca2659 (opaque)
 
 On-chain, anyone can see:
   - A deposit of native tokens to the vault
@@ -103,8 +103,8 @@ When it finds an active intent:
 1. Decrypt the ciphertext with the ECIES private key.
 2. Build a structured market snapshot: live price + indicators (MA, RSI, realized volatility) from Binance klines (CoinGecko fallback).
 3. Decide:
-   - typed strategy → evaluate the conditions in code (authoritative action), then ask the TEE for a one-sentence reason;
-   - free-text goal → sealed inference on 0G Compute returns EXECUTE or WAIT.
+   - typed strategy: evaluate the conditions in code (authoritative action), then ask the TEE for a one-sentence reason;
+   - free-text goal: sealed inference on 0G Compute returns EXECUTE or WAIT.
 4. Upload the decision receipt to 0G Storage (always on Galileo) and get a merkle root hash.
 5. Sign the execution parameters with EIP-712 (`ExecParams`) and call `executeTrade()` on the vault, passing a fresh price update applied atomically inside the same transaction.
 6. The vault refreshes the oracle, computes the slippage floor, performs the swap, and sends the settlement token directly to the user.
@@ -399,7 +399,7 @@ Other chains use their standard public testnet RPCs (see `agent/.env.example` an
 ### What to Look For
 
 1. The ciphertext on-chain (the first arg of `depositNative` is opaque encrypted bytes).
-2. The agent terminal: decrypt → indicators → TEE decision → 0G Storage upload → EIP-712 execute.
+2. The agent terminal: decrypt, indicators, TEE decision, 0G Storage upload, EIP-712 execute.
 3. The settlement token arriving in the user's wallet (real USDC on Sepolia, oUSDC elsewhere).
 4. The `TradeExecuted` event carrying the storage receipt hash.
 5. The receipt rendered in `/proof/<hash>`, including the typed-strategy decision trail.

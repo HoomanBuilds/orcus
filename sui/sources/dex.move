@@ -1,5 +1,5 @@
 /// Mock DEX for the Orcus dark pool on Sui. Behaves like the EVM OrcusRouter: takes the
-/// input coin and pays the settlement coin (oUSDC) at the oracle price. No real AMM —
+/// input coin and pays the settlement coin (oUSDC) at the oracle price. No real AMM -
 /// a stand-in for Cetus/DeepBook, which are used on a real Sui deployment.
 module orcus::dex;
 

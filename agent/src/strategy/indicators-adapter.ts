@@ -3,7 +3,7 @@ import { getMarketSnapshot } from "../market.js";
 import type { Indicators } from "./evaluate.js";
 
 // Builds the Indicators accessor the evaluator needs, from Binance 1h klines.
-// All values are public market data computed here — the AI never computes them.
+// All values are public market data computed here - the AI never computes them.
 export async function buildIndicators(symbol: string, coingeckoId: string): Promise<Indicators> {
   const base = JSON.parse(await getMarketSnapshot(symbol, coingeckoId)) as {
     price: number; change24h: string; trend: string;

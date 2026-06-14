@@ -1,7 +1,7 @@
 import type { Strategy } from "./schema.js";
 import type { EvalResult } from "./evaluate.js";
 
-// Deterministic, always-correct reason from the code verdict — used as the fallback.
+// Deterministic, always-correct reason from the code verdict - used as the fallback.
 function codeReason(ev: EvalResult): string {
   const parts = ev.evaluated.map((e) => `${e.desc} ${e.pass ? "✓" : "✗"}`);
   return `${ev.action}: ${parts.join(", ")}`;
@@ -30,7 +30,7 @@ export async function narrate(
           {
             role: "system",
             content:
-              "You write ONE short sentence explaining a sealed trading decision. You are GIVEN the final verdict and each condition's pass/fail — do NOT recompute, do NOT change the verdict. Output STRICT JSON only: {\"reason\": string}.",
+              "You write ONE short sentence explaining a sealed trading decision. You are GIVEN the final verdict and each condition's pass/fail - do NOT recompute, do NOT change the verdict. Output STRICT JSON only: {\"reason\": string}.",
           },
           {
             role: "user",

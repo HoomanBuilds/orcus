@@ -19,7 +19,7 @@ export function IntentStatusBanner({ lifecycle, receiptHash, txHash, explorerTx 
         <span className="w-2 h-2 rounded-full bg-amber-500 animate-[dot-pulse_2s_ease-in-out_infinite]" />
         <div>
           <p className="text-sm font-medium text-amber-800">TEE agent processing your intent</p>
-          <p className="text-[11px] text-amber-600/70 mt-0.5">Sealed inference running — swap will execute automatically</p>
+          <p className="text-[11px] text-amber-600/70 mt-0.5">Sealed inference running - swap will execute automatically</p>
         </div>
       </div>
     );
@@ -31,20 +31,20 @@ export function IntentStatusBanner({ lifecycle, receiptHash, txHash, explorerTx 
         <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
         <div>
           <p className="text-sm font-medium text-[#16a34a]">Trade executed</p>
-          <p className="text-[11px] text-[#16a34a]/60 mt-0.5">Intent fulfilled — settled on-chain</p>
+          <p className="text-[11px] text-[#16a34a]/60 mt-0.5">Intent fulfilled - settled on-chain</p>
         </div>
       </div>
       <div className="flex gap-3">
         {receiptHash && (
           <Link href={`/proof/${receiptHash}`}
             className="text-[11px] text-[#16a34a] underline hover:text-[#16a34a]/70">
-            View proof ↗
+            View proof
           </Link>
         )}
         {txHash && (
           <a href={`${explorerTx ?? "https://chainscan-galileo.0g.ai/tx/"}${txHash}`} target="_blank" rel="noreferrer"
             className="text-[11px] text-[#16a34a]/60 underline hover:text-[#16a34a]/80">
-            tx ↗
+            tx
           </a>
         )}
       </div>

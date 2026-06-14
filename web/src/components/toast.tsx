@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               {t.txHash && (
                 <a href={`${t.explorerTx ?? "https://chainscan-galileo.0g.ai/tx/"}${t.txHash}`} target="_blank" rel="noreferrer"
                   className="text-[11px] text-black/40 underline hover:text-black/70 mt-1.5 inline-block">
-                  View tx ↗
+                  View tx
                 </a>
               )}
             </div>

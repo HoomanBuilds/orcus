@@ -34,7 +34,7 @@ c.selectedOptionBorder    = "rgba(0,0,0,0.12)";
 (orcusTheme.fonts as Record<string, string>).body =
   "var(--font-ibm-plex), system-ui, sans-serif";
 
-// Shadows — subtle
+// Shadows - subtle
 (orcusTheme.shadows as Record<string, string>).connectButton =
   "0 4px 16px rgba(0,0,0,0.12)";
 (orcusTheme.shadows as Record<string, string>).dialog =

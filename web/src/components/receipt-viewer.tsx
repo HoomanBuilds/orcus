@@ -33,7 +33,7 @@ function marketRows(market: unknown): { k: string; v: string }[] {
 
 export function ReceiptViewer({ receipt }: { receipt: DecisionReceipt }) {
   const execute = receipt.verdict.action?.toUpperCase() === "EXECUTE";
-  const when = receipt.ts ? new Date(receipt.ts).toUTCString() : "—";
+  const when = receipt.ts ? new Date(receipt.ts).toUTCString() : "-";
   const mkt = marketRows(receipt.inputs?.market);
 
   return (
@@ -52,7 +52,7 @@ export function ReceiptViewer({ receipt }: { receipt: DecisionReceipt }) {
               color: execute ? "#15803d" : "#9a6700",
             }}
           >
-            {receipt.verdict.action ?? "—"}
+            {receipt.verdict.action ?? "-"}
           </span>
           <span className="text-[11px] text-black/30" style={{ fontFamily: "var(--font-data)" }}>
             sealed inference
@@ -115,7 +115,7 @@ export function ReceiptViewer({ receipt }: { receipt: DecisionReceipt }) {
         <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>
           Oracle floor + enclave
         </p>
-        <Row label="oracle mode">{receipt.inputs?.oracle?.mode ?? "—"}</Row>
+        <Row label="oracle mode">{receipt.inputs?.oracle?.mode ?? "-"}</Row>
         {receipt.inputs?.oracle?.priceScaled && <Row label="price (scaled)">{receipt.inputs.oracle.priceScaled}</Row>}
         {receipt.inputs?.oracle?.address && <Row label="oracle">{receipt.inputs.oracle.address}</Row>}
         <Row label="tee provider">{receipt.tee?.provider}</Row>

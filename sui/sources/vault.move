@@ -1,9 +1,9 @@
 /// MEV-resistant dark-pool vault on Sui. Mirrors the EVM StrategyVault, Move-native:
 ///  - the agent (holder of `AgentCap`) calls `execute_trade`; it never names a recipient,
-///    amount, or DEX — the vault builds the swap and sends output to the user.
+///    amount, or DEX - the vault builds the swap and sends output to the user.
 ///  - a fresh price is applied atomically (oracle::update_price) before the floor is read.
 ///  - a registered ed25519 `attestor` key signs the exec params (the TEE proof, verified
-///    on-chain) — the Move equivalent of the EVM EIP-712 attestation.
+///    on-chain) - the Move equivalent of the EVM EIP-712 attestation.
 ///  - per-user nonce (replay), per-user cancel cooldown (escape hatch), oracle-grounded
 ///    output floor (anti-MEV / anti-rug).
 module orcus::vault;

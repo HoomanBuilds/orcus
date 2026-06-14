@@ -87,14 +87,14 @@ describe("PythPriceOracle", () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(baseFixture);
     const now = await time.latest();
 
-    // price = 0.3 USD: price=30000000, expo=-8 → 30000000 * 10^-8 = 0.3
+    // price = 0.3 USD: price=30000000, expo=-8 -> 30000000 * 10^-8 = 0.3
     const updateData = await buildUpdateData(pyth, 30000000n, -8, now);
     const encoded = encUpdateData([updateData]);
     const fee = await pyth.getUpdateFee([updateData]);
 
     await oracle.updatePrice(encoded, { value: fee });
 
-    // 1 tokenIn (1e18) @ 0.3 USD → 300000 tokenOut (6 dec)
+    // 1 tokenIn (1e18) @ 0.3 USD -> 300000 tokenOut (6 dec)
     const out = await oracle.getExpectedOut(
       await tokenIn18.getAddress(),
       await tokenOut6.getAddress(),
@@ -103,12 +103,12 @@ describe("PythPriceOracle", () => {
     expect(out).to.equal(300000n);
   });
 
-  // ── 18-dec tokenIn → 6-dec tokenOut (H-05 decimals check) ──────────────
-  it("18->6 dec: price=0.3 USD, amountIn=1e18 → expectedOut=300000", async () => {
+  // ── 18-dec tokenIn -> 6-dec tokenOut (H-05 decimals check) ──────────────
+  it("18->6 dec: price=0.3 USD, amountIn=1e18 -> expectedOut=300000", async () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(baseFixture);
     const now = await time.latest();
 
-    // price=30000000, expo=-8 → 30000000 * 1e-8 = 0.3
+    // price=30000000, expo=-8 -> 30000000 * 1e-8 = 0.3
     const updateData = await buildUpdateData(pyth, 30000000n, -8, now);
     const fee = await pyth.getUpdateFee([updateData]);
     await pyth.updatePriceFeeds([updateData], { value: fee });
@@ -123,12 +123,12 @@ describe("PythPriceOracle", () => {
     expect(out).to.equal(300000n);
   });
 
-  // ── 18-dec tokenIn → 18-dec tokenOut ────────────────────────────────────
-  it("18->18 dec: price=0.3 USD, amountIn=2e18 → expectedOut=6e17", async () => {
+  // ── 18-dec tokenIn -> 18-dec tokenOut ────────────────────────────────────
+  it("18->18 dec: price=0.3 USD, amountIn=2e18 -> expectedOut=6e17", async () => {
     const { pyth, oracle, tokenIn18, tokenOut18 } = await loadFixture(baseFixture);
     const now = await time.latest();
 
-    // price=30000000, expo=-8 → 0.3
+    // price=30000000, expo=-8 -> 0.3
     const updateData = await buildUpdateData(pyth, 30000000n, -8, now);
     const fee = await pyth.getUpdateFee([updateData]);
     await pyth.updatePriceFeeds([updateData], { value: fee });
@@ -143,7 +143,7 @@ describe("PythPriceOracle", () => {
     expect(out).to.equal(ethers.parseUnits("0.6", 18));
   });
 
-  // ── staleness — uses loadFixture so time.increase is rolled back afterward ──
+  // ── staleness - uses loadFixture so time.increase is rolled back afterward ──
   it("getExpectedOut reverts with StalePrice after maxAge", async () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(staleFixture);
     const now = await time.latest();
@@ -169,7 +169,7 @@ describe("PythPriceOracle", () => {
     const { pyth, oracle, tokenIn18, tokenOut6 } = await loadFixture(baseFixture);
     const now = await time.latest();
 
-    // price=3, expo=0 → $3 per token
+    // price=3, expo=0 -> $3 per token
     const updateData = await buildUpdateData(pyth, 3n, 0, now);
     const fee = await pyth.getUpdateFee([updateData]);
     await pyth.updatePriceFeeds([updateData], { value: fee });

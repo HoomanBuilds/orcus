@@ -54,6 +54,6 @@ export async function getMarketSnapshot(
     price: 1.0,
     change24h: "0.00",
     trend: "flat",
-    note: "stub — price sources unavailable",
+    note: "stub - price sources unavailable",
   });
 }

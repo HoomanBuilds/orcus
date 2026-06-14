@@ -21,7 +21,7 @@ export function WalletConnectPrompt({ page }: { page: string }) {
       className="min-h-screen flex flex-col items-center justify-center px-6"
       style={{ background: "#F5F4F0", paddingTop: 88 }}
     >
-      {/* Background image — same footer asset, masks up */}
+      {/* Background image - same footer asset, masks up */}
       <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
         <img
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/footer-H55fzz5AzA5Y6jAI5IKopqp3GCQCWF.png"
