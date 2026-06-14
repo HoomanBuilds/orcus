@@ -48,7 +48,7 @@ export function RevealText({
   });
 
   return (
-    // @ts-ignore — dynamic tag
+    // @ts-ignore - dynamic tag
     <Tag ref={ref} className={className} style={{ display: "block" }}>
       {words.map(({ word, index }) => {
         if (word === "\n") return <br key={`br-${index}`} />;

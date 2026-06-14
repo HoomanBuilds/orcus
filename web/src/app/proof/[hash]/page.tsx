@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { fetchReceipt } from "@/lib/receipt";
+import { ReceiptViewer } from "@/components/receipt-viewer";
+import { chainByKey } from "@/lib/chains";
 
 interface Props {
   params: Promise<{ hash: string }>;
@@ -6,8 +9,12 @@ interface Props {
 
 export default async function ProofViewer({ params }: Props) {
   const { hash } = await params;
+  const receipt = await fetchReceipt(hash);
   const storageScanUrl = "https://storagescan-galileo.0g.ai/submissions";
-  const chainScanUrl = `https://chainscan-galileo.0g.ai/address/0xc624fFC2c9069a53e0D62CF5172fB10aDDA2D205`;
+  const tradeChain = receipt ? chainByKey(receipt.chain.key) : undefined;
+  const vaultAddress = tradeChain?.vault ?? process.env.NEXT_PUBLIC_VAULT_ADDRESS ?? "";
+  const explorerBase = tradeChain?.explorerAddr ?? "https://chainscan-galileo.0g.ai/address/";
+  const chainScanUrl = `${explorerBase}${vaultAddress}`;
 
   return (
     <div className="min-h-screen" style={{ background: "#F5F4F0", paddingTop: 88 }}>
@@ -33,6 +40,20 @@ export default async function ProofViewer({ params }: Props) {
             </p>
           </div>
 
+          {/* Decoded receipt (fetched from 0G Storage by root) */}
+          {receipt ? (
+            <ReceiptViewer receipt={receipt} />
+          ) : (
+            <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
+              <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>
+                Receipt
+              </p>
+              <p className="text-sm text-black/45 leading-relaxed">
+                Not yet retrievable from 0G Storage - it may still be propagating across storage nodes, or this root predates the current deployment. The merkle root above is the on-chain proof; the full JSON renders here once the file is indexed.
+              </p>
+            </div>
+          )}
+
           {/* Links */}
           <div className="grid grid-cols-2 gap-3">
             <a
@@ -41,7 +62,7 @@ export default async function ProofViewer({ params }: Props) {
               rel="noreferrer"
               className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
             >
-              0G StorageScan ↗
+              0G StorageScan
             </a>
             <a
               href={chainScanUrl}
@@ -49,7 +70,7 @@ export default async function ProofViewer({ params }: Props) {
               rel="noreferrer"
               className="flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-2xl border border-black/10 text-[#111] bg-white hover:border-black/25 hover:bg-[#fafaf8] transition-all"
             >
-              Vault on ChainScan ↗
+              Vault on explorer
             </a>
           </div>
 
@@ -80,7 +101,7 @@ export default async function ProofViewer({ params }: Props) {
               TEE attestation
             </p>
             <p className="text-sm text-black/45 leading-relaxed">
-              The TEE inference runs inside an Intel TDX enclave via 0G Compute. Full DCAP attestation verification is post-MVP — the sealed execution guarantee is enforced by the 0G Compute network.
+              The TEE inference runs inside an Intel TDX enclave via 0G Compute. Full DCAP attestation verification is post-MVP - the sealed execution guarantee is enforced by the 0G Compute network.
             </p>
           </div>
 

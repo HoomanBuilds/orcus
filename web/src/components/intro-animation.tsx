@@ -50,7 +50,7 @@ export function IntroAnimation({ onDone }: { onDone: () => void }) {
       }}
       aria-hidden="true"
     >
-      {/* Light curtain — retracts upward */}
+      {/* Light curtain - retracts upward */}
       <div
         style={{
           position: "absolute",

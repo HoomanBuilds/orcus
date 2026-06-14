@@ -7,13 +7,7 @@ function required(name: string): string {
 }
 
 export const env = {
-  rpc: required("GALILEO_RPC"),
-  chainId: 16602,
-  agentPk: required("AGENT_PRIVATE_KEY"),
-  agentEciesSk: required("AGENT_ECIES_PRIVATE_KEY"),
-  vault: required("VAULT_ADDRESS"),
+  agentPk:        required("AGENT_PRIVATE_KEY"),
+  agentEciesSk:   required("AGENT_ECIES_PRIVATE_KEY"),
   storageIndexer: required("STORAGE_INDEXER"),
-  jaineRouter: required("JAINE_ROUTER"),
-  zgServiceUrl: required("ZG_SERVICE_URL"),
-  zgApiSecret: required("ZG_API_SECRET"),
 };

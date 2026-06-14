@@ -1,53 +1,40 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { sealedDecide } from "./sealedDecide.js";
 
-function mockBroker() {
-  return {
-    inference: {
-      listService: vi.fn().mockResolvedValue([
-        { provider: "0xPROV", verifiability: "TeeML" },
-      ]),
-      getServiceMetadata: vi.fn().mockResolvedValue({
-        endpoint: "https://tee.example",
-        model: "deepseek",
-      }),
-      requestHeaders: vi.fn().mockResolvedValue({ "X-Sig": "ok" }),
-      processResponse: vi.fn().mockResolvedValue(undefined),
-    },
-  };
-}
-
 describe("sealedDecide", () => {
-  it("returns parsed decision and ALWAYS calls processResponse", async () => {
-    const broker = mockBroker();
-    global.fetch = vi.fn().mockResolvedValue({
-      headers: { get: () => "chat-123" },
-      json: async () => ({
-        id: "chat-123",
-        choices: [
-          { message: { content: JSON.stringify({ action: "EXECUTE", reason: "ok", tradeParams: {} }) } },
-        ],
-        usage: { total_tokens: 10 },
-      }),
-    }) as unknown as typeof fetch;
-
-    const out = await sealedDecide(broker as any, "0xPROV", "ciphertext", "market");
-    expect(out.action).toBe("EXECUTE");
-    expect(broker.inference.processResponse).toHaveBeenCalledWith("0xPROV", "chat-123", { total_tokens: 10 });
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("calls processResponse even when JSON parse fails", async () => {
-    const broker = mockBroker();
+  it("parses an EXECUTE decision from the TEE response", async () => {
     global.fetch = vi.fn().mockResolvedValue({
-      headers: { get: () => "chat-456" },
+      ok: true,
       json: async () => ({
-        id: "chat-456",
-        choices: [{ message: { content: "not json" } }],
-        usage: { total_tokens: 5 },
+        choices: [{ message: { content: JSON.stringify({ action: "EXECUTE", reason: "ok", tradeParams: {} }) } }],
       }),
     }) as unknown as typeof fetch;
+    const out = await sealedDecide("https://tee.example", "secret", "test-model", "ciphertext", "market");
+    expect(out.action).toBe("EXECUTE");
+    expect(out.reason).toBe("ok");
+  });
 
-    await expect(sealedDecide(broker as any, "0xPROV", "c", "m")).rejects.toThrow();
-    expect(broker.inference.processResponse).toHaveBeenCalledWith("0xPROV", "chat-456", { total_tokens: 5 });
+  it("strips markdown fences before parsing", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "```json\n{\"action\":\"WAIT\",\"reason\":\"conditional\"}\n```" } }],
+      }),
+    }) as unknown as typeof fetch;
+    const out = await sealedDecide("https://tee.example", "secret", "test-model", "c", "m");
+    expect(out.action).toBe("WAIT");
+  });
+
+  it("throws on a non-ok response", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "boom" }) as unknown as typeof fetch;
+    await expect(sealedDecide("https://tee.example", "secret", "test-model", "c", "m")).rejects.toThrow(/inference error 500/);
+  });
+
+  it("throws when serviceUrl/apiSecret missing", async () => {
+    await expect(sealedDecide("", "", "test-model", "c", "m")).rejects.toThrow(/must be set/);
   });
 });

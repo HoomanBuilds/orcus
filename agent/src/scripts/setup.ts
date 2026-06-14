@@ -41,7 +41,7 @@ function cli(args: string[], input?: string): string {
 }
 
 function section(title: string) {
-  console.log(`\n${"─".repeat(60)}\n  ${title}\n${"─".repeat(60)}`);
+  console.log(`\n${"-".repeat(60)}\n  ${title}\n${"-".repeat(60)}`);
 }
 
 async function main() {

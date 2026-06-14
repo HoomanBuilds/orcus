@@ -1,19 +1,23 @@
-import { Contract, JsonRpcProvider, Wallet, zeroPadValue } from "ethers";
+import { AbiCoder, Contract, JsonRpcProvider, Wallet, zeroPadValue } from "ethers";
 import { Indexer } from "@0gfoundation/0g-ts-sdk";
 import { env } from "./env.js";
+import { resolveChain } from "./chains.js";
 import { decryptIntent } from "./crypto/ecies.js";
 import { sealedDecide } from "./tee/sealedDecide.js";
 import { writeReceipt } from "./storage/writeReceipt.js";
-import { getMarketSnapshot } from "./market.js";
-import {
-  buildSwapCalldata,
-  getLiquidPairs,
-  TESTNET_TOKENS,
-  DEFAULT_POOL_FEE,
-} from "./dex/jaine.js";
+import { buildMarketSnapshot } from "./indicators.js";
+import { buildDecisionReceipt, type StrategyTrail } from "./receipt.js";
+import { isStrategy } from "./strategy/schema.js";
+import { evaluateStrategy } from "./strategy/evaluate.js";
+import { buildIndicators } from "./strategy/indicators-adapter.js";
+import { narrate } from "./strategy/narrate.js";
+import { signExecParams } from "./sign/execParams.js";
+import { getOgPriceScaled } from "./price/binance.js";
+import { buildPythPriceUpdate } from "./price/pyth.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
+const ZG_RPC = process.env.ZG_RPC ?? "https://evmrpc-testnet.0g.ai"; // 0G Storage settles on Galileo, not the trading chain
 
 function log(tag: string, msg: string) {
   console.log(`[${new Date().toISOString()}] [${tag}] ${msg}`);
@@ -24,22 +28,24 @@ function err(tag: string, msg: string, e?: unknown) {
 }
 
 async function main() {
-  const provider = new JsonRpcProvider(env.rpc);
+  const chain = resolveChain();
+  const provider = new JsonRpcProvider(chain.rpc);
   const wallet = new Wallet(env.agentPk, provider);
-  const vault = new Contract(env.vault, vaultAbi as never[], wallet);
+  const vault = new Contract(chain.vault, vaultAbi as never[], wallet);
   const indexer = new Indexer(env.storageIndexer);
+  const zgWallet = chain.rpc === ZG_RPC ? wallet : new Wallet(env.agentPk, new JsonRpcProvider(ZG_RPC));
 
-  log("boot", `vault=${env.vault}`);
+  log("boot", `chain=${chain.name} (${chain.chainId}) vault=${chain.vault}`);
   log("boot", `agent=${wallet.address}`);
+  log("boot", `settlement token = ${chain.usdc} | priceMode=${chain.priceMode}`);
+
+  const settlementToken = chain.usdc;
 
   // Watchdog
   setInterval(async () => {
     try { await provider.getBlockNumber(); }
-    catch (e) { err("watchdog", "RPC unreachable — exiting for restart", e); process.exit(1); }
+    catch (e) { err("watchdog", "RPC unreachable - exiting for restart", e); process.exit(1); }
   }, 30_000);
-
-  const livePairs = await getLiquidPairs(provider).catch(() => []);
-  log("boot", `live pools: ${livePairs.length > 0 ? livePairs.map(p => `${p.tokenIn}→${p.tokenOut}`).join(", ") : "(using OrcusRouter)"}`);
 
   const inFlight = new Set<string>();
   const seen = new Set<string>();
@@ -55,34 +61,82 @@ async function main() {
     try {
       log("intent", `user=${user} amount=${amount.toString()}`);
 
-      const intent = await vault["intents"](user) as { encryptedGoal: string; maxSlippage: bigint };
-      const plain = decryptIntent<{ goal: string; tokenOut?: string; maxSlippage: number }>(
-        env.agentEciesSk,
-        intent.encryptedGoal,
-      );
-      log("decrypt", `goal="${plain.goal}" tokenOut=${plain.tokenOut ?? "USDT"}`);
+      const intent = await vault["intents"](user) as { encryptedGoal: string };
+      const plain = decryptIntent<unknown>(env.agentEciesSk, intent.encryptedGoal);
 
-      log("market", "fetching snapshot...");
-      const market = await getMarketSnapshot();
-      const mkt = JSON.parse(market) as { price?: number; trend?: string };
-      log("market", `price=${mkt.price} trend=${mkt.trend}`);
+      log("market", "building structured snapshot...");
+      const market = await buildMarketSnapshot(chain.binanceSymbol, chain.coingeckoId);
+      const mkt = JSON.parse(market) as { price?: number; trend?: string; indicators?: { rsi14?: number | null } };
+      log("market", `price=${mkt.price} trend=${mkt.trend} rsi14=${mkt.indicators?.rsi14 ?? "n/a"}`);
 
-      log("tee", "calling sealed inference...");
-      const decision = await sealedDecide(null, TEE_PROVIDER, JSON.stringify(plain), market);
-      log("tee", `action=${decision.action} reason="${decision.reason}"`);
+      let action: string;
+      let reason: string;
+      let strategyTrail: StrategyTrail | undefined;
 
-      if (decision.action !== "EXECUTE") {
-        log("tee", "decision is WAIT — skipping execution");
+      if (isStrategy(plain)) {
+        // Typed strategy: code computes indicators + evaluates conditions (authoritative);
+        // the sealed AI only writes the reason (with code fallback).
+        log("strategy", `typed strategy: ${plain.conditions.length} condition(s) logic=${plain.logic}`);
+        const ind = await buildIndicators(chain.binanceSymbol, chain.coingeckoId);
+        const ev = evaluateStrategy(plain, ind);
+        log("strategy", `code verdict=${ev.action} [${ev.evaluated.map((e) => `${e.desc}:${e.pass ? "✓" : "✗"}`).join(", ")}]`);
+        const narration = await narrate(chain.zgServiceUrl, chain.zgApiSecret, chain.zgModel, plain, ev);
+        action = ev.action;
+        reason = narration.reason;
+        strategyTrail = { conditions: plain.conditions, logic: plain.logic, evaluated: ev.evaluated, action: ev.action, reason: narration.reason, aiReason: narration.aiReason };
+      } else {
+        // Legacy free-text {goal}: one-shot sealed decision.
+        const legacy = plain as { goal?: string };
+        log("decrypt", `legacy free-text goal="${legacy.goal ?? ""}"`);
+        const decision = await sealedDecide(chain.zgServiceUrl, chain.zgApiSecret, chain.zgModel, JSON.stringify(plain), market);
+        action = decision.action;
+        reason = decision.reason;
+      }
+      log("tee", `action=${action} reason="${reason}"`);
+
+      if (action !== "EXECUTE") {
+        log("decision", "WAIT - skipping execution");
         return;
       }
 
-      log("storage", "writing receipt to 0G Storage...");
+      // Build the fresh price update applied atomically inside executeTrade.
+      let priceScaled: bigint | null = null;
+      let priceUpdate = "0x";
+      let priceUpdateValue = 0n;
+      if (chain.priceMode === "mock") {
+        priceScaled = await getOgPriceScaled(chain.binanceSymbol, chain.coingeckoId, chain.usdcDecimals);
+        priceUpdate = AbiCoder.defaultAbiCoder().encode(["uint256"], [priceScaled]);
+      }
+      const oracleAddr = await vault["oracle"]() as string;
+      if (chain.priceMode === "pyth") {
+        const built = await buildPythPriceUpdate(provider, wallet, oracleAddr);
+        priceUpdate = built.priceUpdate;
+        priceUpdateValue = built.value;
+        log("price", `pyth update fetched (fee=${priceUpdateValue} wei, mode=pyth)`);
+      }
+      log("price", `0G/USD=${priceScaled?.toString() ?? "n/a"} (mode=${chain.priceMode})`);
+
+      log("storage", "writing decision receipt to 0G Storage...");
+      const receipt = buildDecisionReceipt({
+        chainKey: chain.key,
+        chainId: chain.chainId,
+        user,
+        ts: Date.now(),
+        marketJson: market,
+        oracleMode: chain.priceMode,
+        oracleAddress: oracleAddr,
+        priceScaled: priceScaled === null ? null : priceScaled.toString(),
+        teeProvider: TEE_PROVIDER,
+        action,
+        reason,
+        strategy: strategyTrail,
+      });
       const receiptHashRaw = await writeReceipt(
         indexer as never,
         null,
-        wallet,
-        { user, decision, ts: Date.now() },
-        env.rpc,
+        zgWallet,
+        receipt,
+        ZG_RPC,
       );
       const raw = receiptHashRaw.startsWith("0x") ? receiptHashRaw : `0x${receiptHashRaw}`;
       const rawBytes = Buffer.from(raw.replace(/^0x/, ""), "hex");
@@ -90,26 +144,23 @@ async function main() {
       const receiptHash = zeroPadValue(raw, 32) as `0x${string}`;
       log("storage", `receipt=${receiptHash}`);
 
-      const wantedSymbol = (plain.tokenOut ?? "USDC") as keyof typeof TESTNET_TOKENS;
-      const tokenOut = TESTNET_TOKENS[wantedSymbol] ?? TESTNET_TOKENS.USDC;
+      const tokenOut = settlementToken;
 
       const deadline = Math.floor(Date.now() / 1000) + 300;
-      const minAmountOut = 0n;
-
-      log("swap", `WOGN→${wantedSymbol} amount=${amount} minOut=${minAmountOut}`);
-
-      const tradeData = buildSwapCalldata({
-        tokenIn: TESTNET_TOKENS.WOGN,
-        tokenOut: tokenOut,
-        amountIn: amount,
-        minAmountOut,
-        recipient: user,
+      const nonce = await vault["intentNonce"](user) as bigint;
+      const params = {
+        user,
+        tokenOut,
+        fee: chain.poolFee,
+        agentMinOut: 0n,
         deadline,
-        fee: DEFAULT_POOL_FEE,
-      });
+        receiptHash,
+        nonce,
+      };
+      const signature = await signExecParams(wallet, chain.chainId, chain.vault, params);
 
-      log("swap", "sending executeTradeWithProof...");
-      const tx = await vault["executeTradeWithProof"](user, tradeData, "0x", receiptHash, minAmountOut);
+      log("swap", `executeTrade settle=${tokenOut} (${chain.usdcDecimals}dec) fee=${chain.poolFee} nonce=${nonce}`);
+      const tx = await vault["executeTrade"](params, signature, priceUpdate, { value: priceUpdateValue });
       const r = await (tx as { wait(): Promise<{ hash: string }> }).wait();
       log("swap", `executed tx=${r?.hash}`);
     } catch (e) {
@@ -125,14 +176,14 @@ async function main() {
 
   // Backfill: scan in 500-block chunks (Galileo RPC silently caps large ranges)
   const CHUNK = 500;
-  const LOOKBACK = 5_000;
+  const LOOKBACK = chain.lookbackBlocks;
   log("backfill", `scanning last ${LOOKBACK} blocks in ${CHUNK}-block chunks`);
   const usersFound = new Set<string>();
   try {
     for (let hi = currentBlock; hi > currentBlock - LOOKBACK; hi -= CHUNK) {
       const lo = Math.max(0, hi - CHUNK + 1);
       const pastLogs = await provider.getLogs({
-        address: env.vault,
+        address: chain.vault,
         topics: [intentSetTopic],
         fromBlock: lo,
         toBlock: hi,
@@ -144,10 +195,10 @@ async function main() {
         const user = parsed.args[0] as string;
         if (usersFound.has(user)) continue;
         usersFound.add(user);
-        const onChain = await vault["intents"](user) as { active: boolean; depositAmount: bigint };
+        const onChain = await vault["intents"](user) as { active: boolean; amountIn: bigint };
         if (!onChain.active) { log("backfill", `${user} already settled`); continue; }
         log("backfill", `active intent for ${user}`);
-        await processIntentEvent(user, onChain.depositAmount, log_.transactionHash);
+        await processIntentEvent(user, onChain.amountIn, log_.transactionHash);
       }
     }
   } catch (e) {
@@ -156,10 +207,10 @@ async function main() {
 
   // Fallback: directly check agent wallet (covers case where agent == user in testing)
   if (!usersFound.has(wallet.address)) {
-    const selfIntent = await vault["intents"](wallet.address) as { active: boolean; depositAmount: bigint };
+    const selfIntent = await vault["intents"](wallet.address) as { active: boolean; amountIn: bigint };
     if (selfIntent.active) {
       log("backfill", `direct check: active intent on agent wallet ${wallet.address}`);
-      await processIntentEvent(wallet.address, selfIntent.depositAmount, `self-${Date.now()}`);
+      await processIntentEvent(wallet.address, selfIntent.amountIn, `self-${Date.now()}`);
     }
   }
 
@@ -169,7 +220,7 @@ async function main() {
       const toBlock = await provider.getBlockNumber();
       if (toBlock < fromBlock) return;
       const logs = await provider.getLogs({
-        address: env.vault,
+        address: chain.vault,
         topics: [intentSetTopic],
         fromBlock,
         toBlock,
@@ -186,7 +237,7 @@ async function main() {
     } catch (e) {
       err("poll", "poll error", e);
     }
-  }, 4_000);
+  }, chain.pollIntervalMs);
 }
 
 main().catch((e) => {

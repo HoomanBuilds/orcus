@@ -10,7 +10,6 @@ import { PixelIcon } from "@/components/pixel-icon";
 import { StackingTradeCards } from "@/components/stacking-trade-cards";
 import { LiveIntentFeed, LiveIntentCounter } from "@/components/live-intent-feed";
 
-// ── Intersection Observer hook ──────────────────────────────────────────────
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -24,7 +23,6 @@ function useInView(threshold = 0.15) {
   return { ref, inView };
 }
 
-// ── Scroll-triggered counter ────────────────────────────────────────────────
 function Counter({ end, suffix = "" }: { end: number; suffix?: string }) {
   const { ref, inView } = useInView(0.2);
   const [count, setCount] = useState(0);
@@ -42,7 +40,6 @@ function Counter({ end, suffix = "" }: { end: number; suffix?: string }) {
   return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
 }
 
-// ── Bento card ───────────────────────────────────────────────────────────────
 function BentoCard({ children, className = "", delay = 0 }: {
   children: React.ReactNode;
   className?: string;
@@ -68,7 +65,6 @@ function BentoCard({ children, className = "", delay = 0 }: {
   );
 }
 
-// ── Scroll-reveal wrapper (fixes hooks-in-map) ────────────────────────────────
 function FadeIn({ children, delay = 0, direction = "up", className = "" }: {
   children: React.ReactNode;
   delay?: number;
@@ -92,7 +88,6 @@ function FadeIn({ children, delay = 0, direction = "up", className = "" }: {
   );
 }
 
-// ── Tag pill ─────────────────────────────────────────────────────────────────
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-widest font-sans text-black/40 bg-black/[0.04]">
@@ -101,7 +96,6 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── DevEx: typed code line data ───────────────────────────────────────────────
 type CodeLineData =
   | { type: "gap" }
   | { type: "comment" | "output" | "success" | "command" | "plain"; text: string }
@@ -109,7 +103,6 @@ type CodeLineData =
   | { type: "fn"; text: string; args: string }
   | { type: "keyword"; text: string; after: string; keyword2?: string; keyword3?: string; fn?: string; args?: string; string?: string };
 
-// ── DevEx: Orcus-adapted steps ────────────────────────────────────────────────
 const DEVEX_STEPS: { num: string; title: string; desc: string; file: string; code: CodeLineData[] }[] = [
   {
     num: "01",
@@ -180,7 +173,7 @@ const DEVEX_STEPS: { num: string; title: string; desc: string; file: string; cod
       { type: "keyword", text: "const", after: " receipt ", keyword2: "=", keyword3: " await ", fn: "indexer.getFileInfo", args: "(receiptHash)" },
       { type: "gap" },
       { type: "success", text: "✓ Receipt verified on 0G Storage" },
-      { type: "output", text: "  → root hash committed on-chain forever" },
+      { type: "output", text: "  root hash committed on-chain forever" },
     ],
   },
 ];
@@ -222,7 +215,6 @@ function CodeLine({ line }: { line: CodeLineData }) {
   return null;
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const [heroReady, setHeroReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
@@ -232,7 +224,7 @@ export default function Home() {
   const [ctaEmail, setCtaEmail] = useState("");
   const [ctaSubmitted, setCtaSubmitted] = useState(false);
 
-  // Captured at render time — before any effects mutate _introPlayed
+  // Captured at render time - before any effects mutate _introPlayed
   const willPlayIntro = useRef(!_introPlayed);
 
   const handleIntroDone = useCallback(() => setHeroReady(true), []);
@@ -285,7 +277,7 @@ export default function Home() {
 
       {showIntro && <IntroAnimation onDone={handleIntroDone} />}
 
-      {/* ── HERO ──────────────────────────────────────────────────────────── */}
+      {/* HERO */}
       <section className="relative h-screen overflow-hidden">
 
         <video
@@ -343,7 +335,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── PLATFORM BENTO ────────────────────────────────────────────────── */}
+      {/* PLATFORM BENTO */}
       <section id="platform" className="py-32 px-6 md:px-12 lg:px-20">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
@@ -420,7 +412,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── ARCHITECTURE stacking cards ───────────────────────────────────── */}
+      {/* ARCHITECTURE stacking cards */}
       <section id="agents" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 mb-16">
@@ -439,7 +431,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── PROTOCOL FLOW (4 cards) ───────────────────────────────────────── */}
+      {/* PROTOCOL FLOW (4 cards) */}
       <section id="workflow" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06] overflow-hidden">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
@@ -482,7 +474,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── INTEGRATIONS (Verification Layer) ────────────────────────────── */}
+      {/* INTEGRATIONS (Verification Layer) */}
       <section id="integrations" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06] overflow-hidden">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
@@ -581,7 +573,7 @@ export default function Home() {
                 <div>
                   <p className="text-xs text-black/40 tracking-widest uppercase mb-1">Protocol</p>
                   <h3 className="text-2xl font-light">End-to-end sealed pipeline</h3>
-                  <p className="text-sm text-black/45 mt-2 leading-relaxed max-w-xs">From browser encryption to on-chain proof — no plaintext is ever exposed across any hop.</p>
+                  <p className="text-sm text-black/45 mt-2 leading-relaxed max-w-xs">From browser encryption to on-chain proof - no plaintext is ever exposed across any hop.</p>
                 </div>
               </div>
             </BentoCard>
@@ -589,7 +581,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── MARQUEE ───────────────────────────────────────────────────────── */}
+      {/* MARQUEE */}
       <section className="py-0 border-t border-black/[0.06] overflow-hidden select-none">
         <div className="flex border-b border-black/[0.06]" style={{ animation: "marqueeLeft 28s linear infinite" }}>
           {[...Array(3)].map((_, rep) => (
@@ -617,7 +609,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── SECURITY ─────────────────────────────────────────────────────── */}
+      {/* SECURITY */}
       <section id="security" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
@@ -635,7 +627,7 @@ export default function Home() {
                 {
                   label: "ECIES-256",
                   title: "Asymmetric encryption",
-                  desc: "Your intent is encrypted with the vault's public key in-browser. Only the TEE enclave — never the vault contract, never us — holds the private key to decrypt it.",
+                  desc: "Your intent is encrypted with the vault's public key in-browser. Only the TEE enclave - never the vault contract, never us - holds the private key to decrypt it.",
                   delay: 0,
                 },
                 {
@@ -653,7 +645,7 @@ export default function Home() {
                 {
                   label: "MEV Shield",
                   title: "Structural front-run immunity",
-                  desc: "Encrypted intents are unreadable to block builders, searchers, and validators. The sealed pool means your trade strategy is structurally protected — not just hoped-for.",
+                  desc: "Encrypted intents are unreadable to block builders, searchers, and validators. The sealed pool means your trade strategy is structurally protected - not just hoped-for.",
                   delay: 240,
                 },
               ].map((item) => (
@@ -764,7 +756,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── LIVE INTENTS ──────────────────────────────────────────────────── */}
+      {/* LIVE INTENTS */}
       <section id="live" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
@@ -789,7 +781,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── DEVELOPER EXPERIENCE ─────────────────────────────────────────── */}
+      {/* DEVELOPER EXPERIENCE */}
       <section id="devex" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
@@ -885,7 +877,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── CTA ───────────────────────────────────────────────────────────── */}
+      {/* CTA */}
       <section className="relative py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06] overflow-hidden">
         <img
           src="/images/footer.png"
@@ -960,7 +952,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── FOOTER ────────────────────────────────────────────────────────── */}
+      {/* FOOTER */}
       <footer className="py-10 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
           <span className="text-xs tracking-[0.25em] text-black/50" style={{ fontFamily: "var(--font-data)", fontWeight: 600 }}>ORCUS</span>
