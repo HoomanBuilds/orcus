@@ -82,7 +82,7 @@ export async function fetchSuiTrades(client: SuiJsonRpcClient, chain: ChainMeta,
   if (!chain.sui) return [];
   try {
     const res = (await client.queryEvents({
-      query: { MoveEventType: `${chain.sui.packageId}::vault::TradeExecuted` },
+      query: { MoveEventType: `${chain.sui.eventsPkg}::vault::TradeExecuted` },
       limit: 50,
       order: "descending",
     })) as { data?: Array<{ parsedJson?: { user?: string; amount_out?: string; receipt_hash?: unknown }; id?: { txDigest?: string }; timestampMs?: string }> };

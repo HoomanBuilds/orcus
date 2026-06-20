@@ -12,16 +12,20 @@ export interface ChainMeta {
   evmChainId?: number;        // evm only
   rpcUrl: string;
   vault: string;             // evm vault address OR sui Vault object id
-  settlementToken: string;   // oUSDC address (evm) / oUSDC coin type (sui)
+  settlementToken: string;   // oUSDC/USDC address (evm) / DeepBook DBUSDC coin type (sui)
   nativeSymbol: string;
   nativeDecimals: number;
   explorerTx: string;        // base url, append <hash>
   explorerAddr: string;      // base url, append <address>
   iconNetwork?: string;      // @web3icons/react NetworkIcon `name`; undefined -> letter badge
-  sui?: { packageId: string; poolId: string; oracleId: string };
+  sui?: { packageId: string; eventsPkg: string; oracleId: string };
 }
 
-const SUI_PKG = "0x07e3af4c0e5389fe27b9fc2519cd5ccdfaae772085ce1a9e754aeb55519f9dc8";
+// packageId = upgraded package (function calls); eventsPkg = original package, whose id
+// every event/struct type keeps across upgrades, so event queries must use it.
+const SUI_PKG = "0xd90464f6f643309be4f424338067bd847e0b53d258a5421585afc6b9d8823861";
+const SUI_EVENTS_PKG = "0x07e3af4c0e5389fe27b9fc2519cd5ccdfaae772085ce1a9e754aeb55519f9dc8";
+const SUI_DBUSDC = "0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7::DBUSDC::DBUSDC";
 
 export const CHAINS: ChainMeta[] = [
   {
@@ -88,14 +92,14 @@ export const CHAINS: ChainMeta[] = [
     key: "sui", name: "Sui Testnet", shortLabel: "SUI", vm: "sui",
     rpcUrl: "https://fullnode.testnet.sui.io:443",
     vault: "0x47e998d5b287f123e128f54b5b23f6f38a2bde1bf1fa8ad288a74d81b0b154f1",
-    settlementToken: `${SUI_PKG}::orcus_usdc::ORCUS_USDC`,
+    settlementToken: SUI_DBUSDC,
     nativeSymbol: "SUI", nativeDecimals: 9,
     explorerTx: "https://suiscan.xyz/testnet/tx/",
     explorerAddr: "https://suiscan.xyz/testnet/object/",
     iconNetwork: "sui",
     sui: {
       packageId: SUI_PKG,
-      poolId: "0x4bd52b1b7817b13432eb49daf6afdbccfe7808f6498cf93bb8e2302d67110973",
+      eventsPkg: SUI_EVENTS_PKG,
       oracleId: "0xc00b3ad57a1f0bf64bc4f51aae31d4a7820f3d13b956dc866c149c72d729b826",
     },
   },
