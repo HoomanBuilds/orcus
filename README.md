@@ -13,8 +13,6 @@ Orcus is an autonomous, multi-chain trading agent. Users submit an encrypted tra
 
 The problem it solves: every DEX transaction today is visible in the public mempool before it confirms. Bots monitor this pool, see your pending swap, and sandwich you - buying before you and selling after, extracting value at your expense. Orcus eliminates this attack surface. The intent is ECIES-encrypted in your browser, only a sealed TEE enclave can read it, and the swap settles in a single atomic transaction that no one can front-run.
 
-This repository is the working testnet build, submitted for the 0G APAC Hackathon (Track 2: Agentic Trading Arena).
-
 ---
 
 ## Table of Contents
