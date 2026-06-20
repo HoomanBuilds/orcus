@@ -55,7 +55,14 @@ public struct OwnerCap has key, store { id: UID }
 /// Agent authority (call execute_trade). Move analogue of `onlyAgent`.
 public struct AgentCap has key, store { id: UID }
 
+/// Hot-potato from `release_for_swap`: no abilities, so the agent's PTB MUST consume it via
+/// `settle_swap`. That forces the DEX output to the user above the oracle floor, so the swap
+/// can route through an external venue (DeepBook) in the same atomic PTB while the vault still
+/// enforces recipient + floor.
+public struct SwapTicket { user: address, min_out: u64, receipt_hash: vector<u8> }
+
 public struct IntentSet has copy, drop { user: address, amount_in: u64 }
+public struct IntentReleased has copy, drop { user: address, amount_in: u64, min_out: u64 }
 public struct TradeExecuted has copy, drop { user: address, amount_out: u64, receipt_hash: vector<u8> }
 public struct Withdrawn has copy, drop { user: address, amount: u64 }
 public struct CancelRequested has copy, drop { user: address, at_ms: u64 }
@@ -155,6 +162,66 @@ public fun execute_trade(
     let out = dex::swap(pool, coin_in, oracle, clock, min_out, ctx);
     let out_val = coin::value(&out);
     assert!(out_val > 0 && out_val >= min_out, E_SLIPPAGE);
+    transfer::public_transfer(out, user);
+    event::emit(TradeExecuted { user, amount_out: out_val, receipt_hash });
+}
+
+/// Like `execute_trade`, but instead of swapping through the built-in mock dex it releases
+/// the user's SUI plus a hot-potato `SwapTicket` so the agent's PTB can swap through DeepBook
+/// (or any DEX) and then `settle_swap`. Same guarantees: AgentCap-gated, attestor-signed,
+/// nonce + deadline + cancel-window checked, fresh price applied, oracle floor computed.
+public fun release_for_swap(
+    _: &AgentCap,
+    v: &mut Vault,
+    oracle: &mut PriceOracle,
+    clock: &Clock,
+    user: address,
+    new_price_scaled: u128,
+    agent_min_out: u64,
+    deadline_ms: u64,
+    receipt_hash: vector<u8>,
+    nonce: u64,
+    signature: vector<u8>,
+    ctx: &mut TxContext,
+): (Coin<SUI>, SwapTicket) {
+    assert!(clock.timestamp_ms() <= deadline_ms, E_EXPIRED);
+
+    if (table::contains(&v.cancel_at, user)) {
+        let ca = *table::borrow(&v.cancel_at, user);
+        assert!(clock.timestamp_ms() < ca + CANCEL_COOLDOWN_MS, E_CANCELLING);
+    };
+
+    let expected_nonce = *table::borrow(&v.nonces, user);
+    assert!(nonce == expected_nonce, E_BAD_NONCE);
+
+    assert!(v.attestor.length() > 0, E_NO_ATTESTOR);
+    let msg = exec_message(user, agent_min_out, deadline_ms, receipt_hash, nonce);
+    assert!(ed25519::ed25519_verify(&signature, &v.attestor, &msg), E_BAD_ATTESTATION);
+
+    assert!(table::contains(&v.intents, user), E_NO_INTENT);
+    let Intent { encrypted_goal: _, deposit, max_slippage_bps } = table::remove(&mut v.intents, user);
+
+    *table::borrow_mut(&mut v.nonces, user) = nonce + 1;
+    if (table::contains(&v.cancel_at, user)) {
+        table::remove(&mut v.cancel_at, user);
+    };
+
+    oracle::update_price(oracle, new_price_scaled, clock);
+    let amount_in = balance::value(&deposit);
+    let expected = oracle::expected_out(oracle, amount_in, clock);
+    let floor = (((expected as u128) * ((MAX_BPS - max_slippage_bps) as u128)) / (MAX_BPS as u128)) as u64;
+    let min_out = if (floor > agent_min_out) { floor } else { agent_min_out };
+
+    event::emit(IntentReleased { user, amount_in, min_out });
+    (coin::from_balance(deposit, ctx), SwapTicket { user, min_out, receipt_hash })
+}
+
+/// Consume the hot-potato from `release_for_swap`: enforce the floor, send the swap output to
+/// the user, emit `TradeExecuted`. Generic over the output coin (DeepBook's quote, e.g. DBUSDC).
+public fun settle_swap<Q>(ticket: SwapTicket, out: Coin<Q>) {
+    let SwapTicket { user, min_out, receipt_hash } = ticket;
+    let out_val = coin::value(&out);
+    assert!(out_val >= min_out, E_SLIPPAGE);
     transfer::public_transfer(out, user);
     event::emit(TradeExecuted { user, amount_out: out_val, receipt_hash });
 }
