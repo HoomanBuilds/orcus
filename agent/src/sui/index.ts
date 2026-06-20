@@ -143,7 +143,8 @@ async function main() {
     }
   }
 
-  const eventType = `${cfg.packageId}::vault::IntentSet`;
+  // event/struct types keep the ORIGINAL package id across upgrades; calls use cfg.packageId
+  const eventType = `${cfg.eventsPkg}::vault::IntentSet`;
 
   // Backfill: scan recent IntentSet events, process any still-active intent.
   try {
