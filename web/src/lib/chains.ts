@@ -113,8 +113,13 @@ export const EVM_CHAINS = CHAINS.filter((c) => c.vm === "evm");
 export const SUI_CHAIN = CHAINS.find((c) => c.vm === "sui")!;
 export const DEFAULT_CHAIN_KEY = "galileo";
 
+// Older agent builds (and receipts already on 0G Storage) tag the Sui chain "sui-testnet";
+// the registry key is "sui". Alias so proof pages resolve the Sui vault, not the fallback.
+const CHAIN_KEY_ALIASES: Record<string, string> = { "sui-testnet": "sui" };
+
 export function chainByKey(key: string): ChainMeta | undefined {
-  return CHAINS.find((c) => c.key === key);
+  const k = CHAIN_KEY_ALIASES[key] ?? key;
+  return CHAINS.find((c) => c.key === k);
 }
 
 export function evmChainById(id: number): ChainMeta | undefined {

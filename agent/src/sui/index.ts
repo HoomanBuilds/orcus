@@ -110,7 +110,7 @@ async function main() {
       const priceScaled = BigInt(Math.round(price * 1_000));
 
       const receipt = buildDecisionReceipt({
-        chainKey: "sui-testnet",
+        chainKey: "sui",
         chainId: 0,
         user,
         ts: Date.now(),
