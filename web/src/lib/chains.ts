@@ -18,6 +18,7 @@ export interface ChainMeta {
   explorerTx: string;        // base url, append <hash>
   explorerAddr: string;      // base url, append <address>
   iconNetwork?: string;      // @web3icons/react NetworkIcon `name`; undefined -> letter badge
+  minNativeDeposit?: number; // UI-enforced min deposit in native units; Sui = DeepBook 1 SUI min order
   sui?: { packageId: string; eventsPkg: string; oracleId: string };
 }
 
@@ -97,6 +98,7 @@ export const CHAINS: ChainMeta[] = [
     explorerTx: "https://suiscan.xyz/testnet/tx/",
     explorerAddr: "https://suiscan.xyz/testnet/object/",
     iconNetwork: "sui",
+    minNativeDeposit: 1, // DeepBook SUI/DBUSDC minimum order size; sub-1-SUI deposits revert at settlement
     sui: {
       packageId: SUI_PKG,
       eventsPkg: SUI_EVENTS_PKG,

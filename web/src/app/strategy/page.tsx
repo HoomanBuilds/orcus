@@ -120,7 +120,9 @@ export default function StrategyPage() {
     }
   }, [phase, txHash, toast, router]);
 
-  const amountValid = !!amount && !isNaN(+amount) && +amount > 0;
+  const minDeposit = activeChain.minNativeDeposit ?? 0;
+  const belowMin = !!amount && +amount > 0 && +amount < minDeposit;
+  const amountValid = !!amount && !isNaN(+amount) && +amount > 0 && +amount >= minDeposit;
   const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid && builderState.valid && (!erc20 || validToken);
 
   async function submit() {
@@ -137,7 +139,7 @@ export default function StrategyPage() {
             conditions: builderState.conditions,
             logic: builderState.logic,
             notes: builderState.notes,
-            trade: { inputAsset: erc20 ? tokenAddr : "native", amountIn: amount, outputToken: "oUSDC", slippageBps: Number(slippage) || 0 },
+            trade: { inputAsset: erc20 ? tokenAddr : "native", amountIn: amount, outputToken: isSui ? "DBUSDC" : "oUSDC", slippageBps: Number(slippage) || 0 },
           };
       const ciphertext = encryptIntentBrowser(AGENT_PUB, payload);
       setCipher(ciphertext.slice(0, 96) + "...");
@@ -351,7 +353,7 @@ export default function StrategyPage() {
                 {/* Settlement note (agent settles in the chain's oUSDC) */}
                 <div className="flex items-center gap-2.5 rounded-xl border border-black/[0.07] bg-black/[0.015] px-4 py-3">
                   <ChainIcon chain={activeChain} size={18} />
-                  <p className="text-[12px] text-black/55">Deposits {effSym}; the sealed agent settles into <span className="text-black/80 font-medium">oUSDC</span> on {activeChain.name}.</p>
+                  <p className="text-[12px] text-black/55">Deposits {effSym}; the sealed agent settles into <span className="text-black/80 font-medium">{isSui ? "DBUSDC via DeepBook" : "oUSDC"}</span> on {activeChain.name}.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -360,6 +362,11 @@ export default function StrategyPage() {
                     <input value={amount} onChange={(e) => setAmount(e.target.value)}
                       className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-[13px] outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
                       style={{ fontFamily: "var(--font-data)", color: "#111", fontVariantNumeric: "tabular-nums" }} />
+                    {minDeposit > 0 && (
+                      <p className="text-[10px]" style={{ fontFamily: "var(--font-data)", color: belowMin ? "#dc2626" : "rgba(0,0,0,0.3)" }}>
+                        Min {minDeposit} {effSym} (DeepBook order size)
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] tracking-[0.14em] uppercase text-black/30" style={{ fontFamily: "var(--font-data)" }}>Slippage (bps)</label>
