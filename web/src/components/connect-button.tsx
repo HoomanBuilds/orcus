@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ConnectButton as RainbowConnectButton } from "@rainbow-me/rainbowkit";
-import { ConnectButton as SuiConnectButton } from "@mysten/dapp-kit";
+import { ConnectModal, useCurrentAccount, useDisconnectWallet } from "@mysten/dapp-kit";
 import { useSwitchChain } from "wagmi";
 import { useActiveChain } from "@/lib/active-chain";
 
@@ -41,14 +41,38 @@ function EvmConnect({ activeChainId }: { activeChainId: number }) {
   );
 }
 
+function SuiConnect() {
+  const account = useCurrentAccount();
+  const { mutate: disconnect } = useDisconnectWallet();
+
+  if (!account) {
+    return (
+      <ConnectModal
+        trigger={
+          <button type="button" className={`${PILL} border border-black/10 bg-[#111] text-white hover:bg-[#333]`}>
+            CONNECT
+          </button>
+        }
+      />
+    );
+  }
+
+  const short = `${account.address.slice(0, 6)}…${account.address.slice(-4)}`;
+  return (
+    <button onClick={() => disconnect()} type="button" title="Disconnect"
+      className={`${PILL} border border-black/10 bg-white hover:bg-black/[0.03] tracking-wide`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2" />
+      <span className="text-black/70" style={{ fontFamily: "var(--font-data)" }}>{short}</span>
+    </button>
+  );
+}
+
 export function OrcusConnectButton() {
   const { activeChain } = useActiveChain();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
-  if (activeChain.vm === "sui") {
-    return <div className="orcus-sui-connect"><SuiConnectButton connectText="CONNECT" /></div>;
-  }
+  if (activeChain.vm === "sui") return <SuiConnect />;
   return <EvmConnect activeChainId={activeChain.evmChainId!} />;
 }
