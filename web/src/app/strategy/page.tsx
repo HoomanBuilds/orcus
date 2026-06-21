@@ -120,10 +120,18 @@ export default function StrategyPage() {
     }
   }, [phase, txHash, toast, router]);
 
+  // Sui needs headroom for the DeepBook spread; bump slippage up to the chain minimum on chain switch.
+  useEffect(() => {
+    const m = activeChain.minSlippageBps ?? 0;
+    setSlippage((s) => (s < m ? m : s));
+  }, [activeChain.key]);
+
   const minDeposit = activeChain.minNativeDeposit ?? 0;
   const belowMin = !!amount && +amount > 0 && +amount < minDeposit;
   const amountValid = !!amount && !isNaN(+amount) && +amount > 0 && +amount >= minDeposit;
-  const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid && builderState.valid && (!erc20 || validToken);
+  const minSlippage = activeChain.minSlippageBps ?? 0;
+  const slippageValid = slippage >= minSlippage;
+  const canSubmit = !!address && !!AGENT_PUB && !hasActive && phase === "idle" && amountValid && slippageValid && builderState.valid && (!erc20 || validToken);
 
   async function submit() {
     if (!canSubmit) return;
@@ -373,6 +381,11 @@ export default function StrategyPage() {
                     <input type="number" value={slippage} onChange={(e) => setSlippage(Number(e.target.value))}
                       className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-[13px] outline-none transition-colors focus:border-black/25 focus:ring-2 focus:ring-black/[0.04]"
                       style={{ fontFamily: "var(--font-data)", color: "#111", fontVariantNumeric: "tabular-nums" }} />
+                    {minSlippage > 0 && (
+                      <p className="text-[10px]" style={{ fontFamily: "var(--font-data)", color: !slippageValid ? "#dc2626" : "rgba(0,0,0,0.3)" }}>
+                        Min {minSlippage} bps (covers DeepBook spread)
+                      </p>
+                    )}
                   </div>
                 </div>
 
