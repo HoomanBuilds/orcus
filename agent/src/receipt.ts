@@ -31,6 +31,7 @@ export interface DecisionReceipt {
   };
   tee: { provider: string; verifiability: "TeeML" };
   verdict: { action: string; reason: string };
+  settlement?: { venue: string; pool: string | null; token: string | null }; // real-DEX routing, e.g. DeepBook v3 on Sui
   strategy?: StrategyTrail;        // present for typed-strategy intents (not legacy free-text)
 }
 
@@ -46,6 +47,7 @@ export function buildDecisionReceipt(p: {
   teeProvider: string;
   action: string;
   reason: string;
+  settlement?: { venue: string; pool: string | null; token: string | null };
   strategy?: StrategyTrail;
 }): DecisionReceipt {
   let market: unknown;
@@ -65,6 +67,7 @@ export function buildDecisionReceipt(p: {
     },
     tee: { provider: p.teeProvider, verifiability: "TeeML" },
     verdict: { action: p.action, reason: p.reason },
+    ...(p.settlement ? { settlement: p.settlement } : {}),
     ...(p.strategy ? { strategy: p.strategy } : {}),
   };
 }

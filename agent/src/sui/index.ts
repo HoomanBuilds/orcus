@@ -121,6 +121,7 @@ async function main() {
         teeProvider: TEE_PROVIDER,
         action: decision.action,
         reason: decision.reason,
+        settlement: { venue: "DeepBook v3", pool: cfg.suiDbusdcPool, token: cfg.dbusdcType },
       });
       const root = await writeReceipt(indexer as never, null, zgWallet, receipt, ZG_RPC);
       const receiptHash = zeroPadValue(root.startsWith("0x") ? root : `0x${root}`, 32);
