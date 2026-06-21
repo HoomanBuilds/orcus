@@ -24,7 +24,7 @@ The problem it solves: every DEX transaction today is visible in the public memp
   - [Strategy Intelligence](#strategy-intelligence)
   - [The Agent](#the-agent)
   - [The Contracts](#the-contracts)
-  - [Settlement: Mock Router vs Real Uniswap](#settlement-mock-router-vs-real-uniswap)
+  - [Settlement: Mock Router, Real Uniswap, and Real DeepBook](#settlement-mock-router-real-uniswap-and-real-deepbook)
   - [The Dashboard](#the-dashboard)
 - [0G Integration](#0g-integration)
 - [Supported Chains](#supported-chains)
@@ -60,7 +60,7 @@ Existing solutions - private mempools, commit-reveal schemes, MEV-Share - all ma
 
 Orcus encrypts the intent at the source with a key only a TEE enclave can access. The enclave runs on 0G Compute, which guarantees that neither the node operator nor any external observer can read the intent or the decision logic. By the time anything hits the chain, the swap is already done.
 
-This is not a theoretical design. The repository contains a working end-to-end flow with verified trade executions, including a **real Uniswap V3 swap settling in real USDC on Ethereum Sepolia** and a live trade on Sui.
+This is not a theoretical design. The repository contains a working end-to-end flow with verified trade executions, including a **real Uniswap V3 swap settling in real USDC on Ethereum Sepolia** and a **real DeepBook v3 swap settling in DBUSDC on Sui**.
 
 ---
 
@@ -120,14 +120,15 @@ The sealed inference call uses the 0G Compute OpenAI-compatible endpoint authent
 - **WrappedNative** - a minimal WETH9 for wrapping native deposits.
 - **PythPriceOracle** - a real Pyth pull adapter (same `IPriceOracle` interface) for the production/mainnet path.
 
-**Sui (Move):** an `orcus` package with `orcus_usdc` (coin), `oracle` (atomic push + expected-out), `dex` (mock swap), and `vault` (capability-gated, ed25519 attestation, oracle floor, per-user nonce, cancel cooldown).
+**Sui (Move):** an `orcus` package with `orcus_usdc` (coin), `oracle` (atomic push + expected-out), `dex` (mock swap, fallback), and `vault` (capability-gated, ed25519 attestation, oracle floor, per-user nonce, cancel cooldown). For real settlement the vault exposes a **hot-potato flow**: `release_for_swap` returns the user's SUI plus a `SwapTicket` (a struct with no abilities, so the Move type system *forces* it to be consumed in the same transaction), and `settle_swap<Q>` enforces the oracle floor on the swap output and pays the user. This lets the agent route through **real DeepBook v3** inside one PTB without the vault depending on DeepBook.
 
-### Settlement: Mock Router vs Real Uniswap
+### Settlement: Mock Router, Real Uniswap, and Real DeepBook
 
-Testnet DEX pools are mostly empty, so a real swap there would just revert. Orcus handles this per chain:
+Most testnet DEX pools are empty, so a real swap would just revert. Orcus uses a mock router where there is no liquidity and a real DEX where there is - handled per chain:
 
-- **Five EVM chains + Sui** run the self-contained **mock router** (OrcusRouter / Move `dex`) and settle in **mock oUSDC**, priced from the live Binance feed.
-- **Ethereum Sepolia** is different: it has a deep, real Uniswap V3 WETH/USDC pool, so its vault points at the **real Uniswap V3 SwapRouter02** and settles in **real USDC** (6 decimals). This is the same `StrategyVault` contract - only `swapRouter`/`routerKind`/`tokenOut` differ.
+- **Five EVM chains** run the self-contained **mock router** (OrcusRouter) and settle in **mock oUSDC**, priced from the live Binance feed.
+- **Ethereum Sepolia** has a deep, real Uniswap V3 WETH/USDC pool, so its vault points at the **real Uniswap V3 SwapRouter02** and settles in **real USDC** (6 decimals). Same `StrategyVault` contract - only `swapRouter`/`routerKind`/`tokenOut` differ.
+- **Sui** settles through **real DeepBook v3**, Sui's flagship on-chain central limit order book: the agent composes one PTB that calls `release_for_swap`, swaps **SUI to DBUSDC** against live order-book liquidity, then calls `settle_swap` (which enforces the oracle floor). DeepBook fees are paid in DEEP held by the agent. DeepBook's SUI/DBUSDC pool has a **1 SUI minimum order size**, so Sui deposits must be at least 1 SUI.
 
 The real-Uniswap path is proven end-to-end on Sepolia: a deposit was swapped through the real SwapRouter02 and the user received real USDC, with the decision receipt on 0G Storage. (Note: testnet pools are not arbitraged, so Sepolia's pool is mispriced ~10x; since the flow sells WETH for USDC the pool overpays and the oracle floor - a minimum - clears comfortably. On a real arbitraged pool the same floor is tight.)
 
@@ -166,7 +167,7 @@ A navbar chain selector switches the active chain (auto-switching the EVM networ
 | Base Sepolia | 84532 | ETH | Mock OrcusRouter | oUSDC (18) |
 | Avalanche Fuji | 43113 | AVAX | Mock OrcusRouter | oUSDC (18) |
 | Mantle Sepolia | 5003 | MNT | Mock OrcusRouter | oUSDC (18) |
-| Sui | testnet | SUI | Mock Move `dex` | oUSDC (6) |
+| Sui | testnet | SUI | **Real DeepBook v3** | **DBUSDC (6)** |
 
 Shared agent/attestor/owner across all EVM chains: `0x17A076d6cCaf37Bc9386EAB653A5EfAd8B07430C`.
 
@@ -216,18 +217,21 @@ Explorers: [Arbitrum Sepolia](https://sepolia.arbiscan.io) · [Base Sepolia](htt
 ### Sui Testnet - [SuiScan](https://suiscan.xyz/testnet)
 | Object | ID |
 | ------ | -- |
-| Package | `0x07e3af4c0e5389fe27b9fc2519cd5ccdfaae772085ce1a9e754aeb55519f9dc8` |
+| Package (current, function calls) | `0xd90464f6f643309be4f424338067bd847e0b53d258a5421585afc6b9d8823861` |
+| Package (original; event/type ids) | `0x07e3af4c0e5389fe27b9fc2519cd5ccdfaae772085ce1a9e754aeb55519f9dc8` |
 | Vault | `0x47e998d5b287f123e128f54b5b23f6f38a2bde1bf1fa8ad288a74d81b0b154f1` |
-| Pool | `0x4bd52b1b7817b13432eb49daf6afdbccfe7808f6498cf93bb8e2302d67110973` |
 | Oracle | `0xc00b3ad57a1f0bf64bc4f51aae31d4a7820f3d13b956dc866c149c72d729b826` |
-| oUSDC coin type | `<package>::orcus_usdc::ORCUS_USDC` |
+| AgentCap | `0xda2724fb85c5a6ca2ab343c7bd0b058309921be6cd5fe889eaa31d15455009da` |
+| DeepBook SUI/DBUSDC pool | `0x1c19362ca52b8ffd7a33cee805a67d40f31e6ba303753fd3a4cfdfacea7163a5` |
+| DBUSDC (settlement, 6 dec) | `0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7::DBUSDC::DBUSDC` |
+| Agent / attestor | `0x7ef7667d2006ac99f799e0d1828ceed105a6245a26b4f7828340f40f192077f8` |
 
 ---
 
 ## Live On-Chain Activity
 
 - **Ethereum Sepolia, real Uniswap V3** - [execute tx](https://sepolia.etherscan.io/tx/0x7fc0fa217139692fc4f0be381f388fd7297da36403d2f1e84608a2e206135837): 0.001 ETH swapped to real USDC through the real SwapRouter02, settled to the user. Receipt root `0xffc58d328c029165881741c390636503177ac6addab517821eb5fd9d741548a2` ([on 0G Storage](https://indexer-storage-testnet-turbo.0g.ai/file?root=0xffc58d328c029165881741c390636503177ac6addab517821eb5fd9d741548a2)).
-- **Sui** - first live end-to-end run: a SUI deposit swapped via the Move `dex`, with receipt root `0x2ed4dc1c4f8c20771a877fd53e510574cae4fad47c24c2ba8945d9bfa83cfd0c` on 0G Storage.
+- **Sui, real DeepBook v3** - [execute tx](https://suiscan.xyz/testnet/tx/Fio8F8vHSyX2Q4yP111mSV5jEyaZ7VAqMkZ25f2fQcQ3): 1 SUI swapped to 0.706 DBUSDC against live DeepBook order-book liquidity, settled to the user through the vault's hot-potato `settle_swap` (oracle floor enforced). The sealed-decision pipeline writes the same 0G Storage receipts on Sui as on every chain (example receipt root `0x2ed4dc1c4f8c20771a877fd53e510574cae4fad47c24c2ba8945d9bfa83cfd0c`).
 - **0G Storage receipts** - [StorageScan submissions](https://storagescan-galileo.0g.ai/submissions) (uploader `0x17A076d6cCaf37Bc9386EAB653A5EfAd8B07430C`).
 
 ---
@@ -260,12 +264,12 @@ orcus/
 │   │   ├── tee/sealedDecide.ts         - 0G Compute inference (qwen2.5-omni-7b, TeeML)
 │   │   ├── storage/writeReceipt.ts     - 0G Storage upload (always Galileo)
 │   │   ├── sign/                       - EIP-712 (EVM) + ed25519 (Sui) attestation
-│   │   ├── sui/                        - Sui listener + PTB execution
+│   │   ├── sui/                        - Sui listener + DeepBook PTB execution (release/swap/settle)
 │   │   └── scripts/                    - intent:evm / intent:sui test depositors, setup
 │   ├── agents.sh                       - run all agents locally (one command)
 │   └── ecosystem.config.cjs            - pm2 config for the host
 │
-├── sui/                                - move package "orcus" (coin, oracle, dex, vault)
+├── sui/                                - move package "orcus" (coin, oracle, dex, vault; release_for_swap/settle_swap hot-potato for DeepBook)
 │
 └── web/                                - next.js 16 (app router)
     └── src/
@@ -339,7 +343,7 @@ You can also create a test intent without the UI: `CHAIN=<key> npm run intent:ev
 | Layer | Tool |
 | ----- | ---- |
 | Smart Contracts | Solidity 0.8.24 (cancun), Hardhat, OpenZeppelin v5, ethers v6 |
-| Sui | Move package (coin / oracle / dex / vault), ed25519 attestation |
+| Sui | Move package (coin / oracle / dex / vault), ed25519 attestation, real DeepBook v3 settlement (PTB + hot-potato `SwapTicket`) |
 | Agent Runtime | TypeScript, Node.js, tsx, vitest |
 | TEE Inference | 0G Compute, qwen2.5-omni-7b, Intel TDX (TeeML) |
 | Audit Storage | 0G Storage SDK (@0gfoundation/0g-ts-sdk), merkle proofs |
@@ -392,7 +396,7 @@ Other chains use their standard public testnet RPCs (see `agent/.env.example` an
 
 ### Why 0G Is Essential
 
-**0G Compute** makes MEV resistance possible - without sealed inference, the agent's decision logic would be visible to the node operator. **0G Storage** provides the accountability layer - every decision is a merkle-anchored receipt linked on-chain. Both are used for *every* trade, on *every* chain, including the real-Uniswap Sepolia settlement and the Sui trade. **0G Chain** is the home network where the system and its proofs live.
+**0G Compute** makes MEV resistance possible - without sealed inference, the agent's decision logic would be visible to the node operator. **0G Storage** provides the accountability layer - every decision is a merkle-anchored receipt linked on-chain. Both are used for *every* trade, on *every* chain, including the real-Uniswap Sepolia and real-DeepBook Sui settlements. **0G Chain** is the home network where the system and its proofs live.
 
 ### What to Look For
 
