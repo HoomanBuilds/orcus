@@ -110,6 +110,22 @@ export function ReceiptViewer({ receipt }: { receipt: DecisionReceipt }) {
         </div>
       )}
 
+      {/* Settlement venue (real-DEX routing, e.g. DeepBook v3 on Sui) */}
+      {receipt.settlement && (
+        <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
+          <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>
+            Settlement venue
+          </p>
+          <Row label="venue">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px]" style={{ background: "rgba(22,163,74,0.10)", color: "#15803d" }}>
+              {receipt.settlement.venue}
+            </span>
+          </Row>
+          {receipt.settlement.token && <Row label="settled in">{receipt.settlement.token.split("::").slice(-1)[0]}</Row>}
+          {receipt.settlement.pool && <Row label="pool">{receipt.settlement.pool}</Row>}
+        </div>
+      )}
+
       {/* Oracle + TEE */}
       <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
         <p className="text-[10px] tracking-[0.14em] uppercase text-black/30 mb-2" style={{ fontFamily: "var(--font-data)" }}>

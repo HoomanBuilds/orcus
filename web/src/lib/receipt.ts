@@ -15,6 +15,7 @@ export interface DecisionReceipt {
   };
   tee: { provider: string; verifiability: string };
   verdict: { action: string; reason: string };
+  settlement?: { venue: string; pool: string | null; token: string | null };
   strategy?: {
     conditions: unknown[];
     logic: string;
