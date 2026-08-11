@@ -14,7 +14,7 @@ import { narrate } from "./strategy/narrate.js";
 import { signExecParams } from "./sign/execParams.js";
 import { getOgPriceScaled } from "./price/binance.js";
 import { buildPythPriceUpdate } from "./price/pyth.js";
-import { createRpcProvider } from "./rpc.js";
+import { createRpcProvider, stableRpcBlock } from "./rpc.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
@@ -174,7 +174,7 @@ async function main() {
   }
 
   const intentSetTopic = vault.interface.getEvent("IntentSet")!.topicHash;
-  const currentBlock = await provider.getBlockNumber();
+  const currentBlock = stableRpcBlock(await provider.getBlockNumber(), chain.rpcUrls.length);
   let fromBlock = currentBlock + 1;
 
   // Backfill: scan in 500-block chunks (Galileo RPC silently caps large ranges)
@@ -220,7 +220,7 @@ async function main() {
   log("poll", "starting 4s poll loop for new IntentSet events");
   setInterval(async () => {
     try {
-      const toBlock = await provider.getBlockNumber();
+      const toBlock = stableRpcBlock(await provider.getBlockNumber(), chain.rpcUrls.length);
       if (toBlock < fromBlock) return;
       const logs = await provider.getLogs({
         address: chain.vault,

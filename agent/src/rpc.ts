@@ -13,3 +13,7 @@ export function createRpcProvider(rpcUrls: string[], chainId: number, stallTimeo
 
   return new FallbackProvider(providers, chainId, { quorum: 1 });
 }
+
+export function stableRpcBlock(latestBlock: number, providerCount: number): number {
+  return Math.max(0, latestBlock - (providerCount > 1 ? 2 : 0));
+}

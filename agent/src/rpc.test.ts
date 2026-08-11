@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { createRpcProvider } from "./rpc.js";
+import { createRpcProvider, stableRpcBlock } from "./rpc.js";
 
 const servers: Server[] = [];
 
@@ -58,5 +58,19 @@ describe("createRpcProvider", () => {
     const provider = createRpcProvider([brokenUrl, healthyUrl], 11155111, 10);
     await expect(provider.getBlockNumber()).resolves.toBe(123);
     provider.destroy();
+  });
+});
+
+describe("stableRpcBlock", () => {
+  it("keeps the latest block for a single provider", () => {
+    expect(stableRpcBlock(100, 1)).toBe(100);
+  });
+
+  it("lags multiple providers to tolerate head differences", () => {
+    expect(stableRpcBlock(100, 2)).toBe(98);
+  });
+
+  it("does not return a negative block at chain start", () => {
+    expect(stableRpcBlock(1, 3)).toBe(0);
   });
 });
