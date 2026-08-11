@@ -6,7 +6,7 @@ export interface ChainConfig {
   key: string;
   name: string;
   chainId: number;
-  rpc: string;
+  rpcUrls: string[];
   vault: string;          // deployed StrategyVault (v2)
   usdc: string;           // settlement token used as ExecParams.tokenOut (the deployed oUSDC on testnets)
   usdcDecimals: number;   // decimals of the settlement token; the Binance push is scaled to 10^this
@@ -36,7 +36,7 @@ interface ChainMeta {
   lookbackBlocks: number;
   pollIntervalMs: number;
   rpcEnv: string;
-  rpcDefault: string;
+  rpcDefaults: readonly string[];
   vaultEnv: string;
   usdcEnv: string;
   zgUrlEnv: string;
@@ -61,7 +61,7 @@ const META: Record<string, ChainMeta> = {
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,
     rpcEnv: "GALILEO_RPC",
-    rpcDefault: "https://evmrpc-testnet.0g.ai",
+    rpcDefaults: ["https://evmrpc-testnet.0g.ai"],
     vaultEnv: "VAULT_ADDRESS",
     usdcEnv: "USDC_ADDRESS",
     zgUrlEnv: "GALILEO_ZG_SERVICE_URL",
@@ -80,7 +80,7 @@ const META: Record<string, ChainMeta> = {
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,
     rpcEnv: "ARBITRUM_SEPOLIA_RPC",
-    rpcDefault: "https://sepolia-rollup.arbitrum.io/rpc",
+    rpcDefaults: ["https://sepolia-rollup.arbitrum.io/rpc"],
     vaultEnv: "ARBITRUM_SEPOLIA_VAULT",
     usdcEnv: "ARBITRUM_SEPOLIA_USDC",
     zgUrlEnv: "ARBITRUM_SEPOLIA_ZG_SERVICE_URL",
@@ -99,7 +99,11 @@ const META: Record<string, ChainMeta> = {
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,
     rpcEnv: "BASE_SEPOLIA_RPC",
-    rpcDefault: "https://sepolia.base.org",
+    rpcDefaults: [
+      "https://base-sepolia-rpc.publicnode.com",
+      "https://base-sepolia.gateway.tenderly.co",
+      "https://sepolia.base.org",
+    ],
     vaultEnv: "BASE_SEPOLIA_VAULT",
     usdcEnv: "BASE_SEPOLIA_USDC",
     zgUrlEnv: "BASE_SEPOLIA_ZG_SERVICE_URL",
@@ -118,7 +122,7 @@ const META: Record<string, ChainMeta> = {
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,
     rpcEnv: "FUJI_RPC",
-    rpcDefault: "https://api.avax-test.network/ext/bc/C/rpc",
+    rpcDefaults: ["https://api.avax-test.network/ext/bc/C/rpc"],
     vaultEnv: "FUJI_VAULT",
     usdcEnv: "FUJI_USDC",
     zgUrlEnv: "FUJI_ZG_SERVICE_URL",
@@ -137,7 +141,7 @@ const META: Record<string, ChainMeta> = {
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,
     rpcEnv: "MANTLE_SEPOLIA_RPC",
-    rpcDefault: "https://rpc.sepolia.mantle.xyz",
+    rpcDefaults: ["https://rpc.sepolia.mantle.xyz"],
     vaultEnv: "MANTLE_SEPOLIA_VAULT",
     usdcEnv: "MANTLE_SEPOLIA_USDC",
     zgUrlEnv: "MANTLE_SEPOLIA_ZG_SERVICE_URL",
@@ -158,7 +162,10 @@ const META: Record<string, ChainMeta> = {
     lookbackBlocks: 5000,
     pollIntervalMs: 4000,
     rpcEnv: "SEPOLIA_RPC",
-    rpcDefault: "https://sepolia.drpc.org",
+    rpcDefaults: [
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://sepolia.gateway.tenderly.co",
+    ],
     vaultEnv: "SEPOLIA_VAULT",
     usdcEnv: "SEPOLIA_USDC",
     zgUrlEnv: "SEPOLIA_ZG_SERVICE_URL",
@@ -171,11 +178,19 @@ export function chainKeys(): string[] {
   return Object.keys(META);
 }
 
+function rpcUrls(m: ChainMeta): string[] {
+  const primary = process.env[m.rpcEnv]?.trim() || m.rpcDefaults[0];
+  const fallbackEnv = process.env[`${m.rpcEnv}_FALLBACKS`];
+  const fallbacks = fallbackEnv === undefined
+    ? m.rpcDefaults.slice(1)
+    : fallbackEnv.split(",").map((url) => url.trim()).filter(Boolean);
+  return [...new Set([primary, ...fallbacks])];
+}
+
 export function resolveChain(): ChainConfig {
   const key = process.env.CHAIN ?? "galileo";
   const m = META[key];
   if (!m) throw new Error(`Unknown CHAIN="${key}". Known: ${chainKeys().join(", ")}`);
-  const rpc = process.env[m.rpcEnv] ?? m.rpcDefault;
   const vault = process.env[m.vaultEnv] ?? "";
   const usdc = process.env[m.usdcEnv] ?? "";
   if (!vault) {
@@ -188,7 +203,7 @@ export function resolveChain(): ChainConfig {
   const zgApiSecret  = process.env[m.zgSecretEnv] ?? process.env.ZG_API_SECRET ?? "";
   const zgModel      = process.env[m.zgModelEnv] ?? process.env.ZG_MODEL ?? "qwen/qwen2.5-omni-7b";
   return {
-    key: m.key, name: m.name, chainId: m.chainId, rpc, vault, usdc,
+    key: m.key, name: m.name, chainId: m.chainId, rpcUrls: rpcUrls(m), vault, usdc,
     usdcDecimals: m.usdcDecimals ?? 18,
     poolFee: m.poolFee, priceMode: m.priceMode,
     binanceSymbol: m.binanceSymbol, coingeckoId: m.coingeckoId,

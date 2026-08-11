@@ -14,6 +14,7 @@ import { narrate } from "./strategy/narrate.js";
 import { signExecParams } from "./sign/execParams.js";
 import { getOgPriceScaled } from "./price/binance.js";
 import { buildPythPriceUpdate } from "./price/pyth.js";
+import { createRpcProvider } from "./rpc.js";
 import vaultAbi from "./abi/strategyVault.json" with { type: "json" };
 
 const TEE_PROVIDER = "0x3feE5a4dd5FDb8a32dDA97Bed899830605dBD9D3";
@@ -29,11 +30,13 @@ function err(tag: string, msg: string, e?: unknown) {
 
 async function main() {
   const chain = resolveChain();
-  const provider = new JsonRpcProvider(chain.rpc);
+  const provider = createRpcProvider(chain.rpcUrls, chain.chainId);
   const wallet = new Wallet(env.agentPk, provider);
   const vault = new Contract(chain.vault, vaultAbi as never[], wallet);
   const indexer = new Indexer(env.storageIndexer);
-  const zgWallet = chain.rpc === ZG_RPC ? wallet : new Wallet(env.agentPk, new JsonRpcProvider(ZG_RPC));
+  const zgWallet = chain.rpcUrls.length === 1 && chain.rpcUrls[0] === ZG_RPC
+    ? wallet
+    : new Wallet(env.agentPk, new JsonRpcProvider(ZG_RPC));
 
   log("boot", `chain=${chain.name} (${chain.chainId}) vault=${chain.vault}`);
   log("boot", `agent=${wallet.address}`);

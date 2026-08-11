@@ -1,4 +1,4 @@
-import { AbiCoder, Contract, JsonRpcProvider, Wallet } from "ethers";
+import { AbiCoder, Contract, type Provider, Wallet } from "ethers";
 
 const HERMES = "https://hermes.pyth.network";
 
@@ -31,7 +31,7 @@ export function encodePythPriceUpdate(updateData: string[]): string {
  * NOTE: requires a live Pyth deployment + Hermes; not exercised on Galileo (mock mode).
  */
 export async function buildPythPriceUpdate(
-  provider: JsonRpcProvider,
+  provider: Provider,
   wallet: Wallet,
   oracleAddr: string,
 ): Promise<{ priceUpdate: string; value: bigint }> {

@@ -1,8 +1,9 @@
 import { PrivateKey } from "eciesjs";
-import { Contract, JsonRpcProvider, Wallet, parseUnits } from "ethers";
+import { Contract, Wallet, parseUnits } from "ethers";
 import { env } from "../env.js";
 import { encryptIntent } from "../crypto/ecies.js";
 import { resolveChain } from "../chains.js";
+import { createRpcProvider } from "../rpc.js";
 import vaultAbi from "../abi/strategyVault.json" with { type: "json" };
 
 // Local test helper: deposits an encrypted intent on an EVM vault so the agent
@@ -10,7 +11,7 @@ import vaultAbi from "../abi/strategyVault.json" with { type: "json" };
 // own ECIES key so the agent can decrypt it. CHAIN selects the vault (e.g. CHAIN=sepolia).
 async function main() {
   const chain = resolveChain();
-  const provider = new JsonRpcProvider(chain.rpc);
+  const provider = createRpcProvider(chain.rpcUrls, chain.chainId);
   const wallet = new Wallet(env.agentPk, provider);
 
   const sk = new PrivateKey(Buffer.from(env.agentEciesSk.replace(/^0x/, ""), "hex"));

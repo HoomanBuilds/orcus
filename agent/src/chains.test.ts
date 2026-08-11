@@ -36,7 +36,7 @@ describe("resolveChain", () => {
   });
 
   it("lists the testnet chains", () => {
-    for (const c of ["galileo", "arbitrum-sepolia", "base-sepolia", "avalanche-fuji", "mantle-sepolia"]) {
+    for (const c of ["galileo", "arbitrum-sepolia", "base-sepolia", "avalanche-fuji", "mantle-sepolia", "sepolia"]) {
       expect(chainKeys()).toContain(c);
     }
   });
@@ -49,6 +49,7 @@ describe("resolveChain", () => {
       "base-sepolia": ["BASE_SEPOLIA_VAULT", "BASE_SEPOLIA_USDC"],
       "avalanche-fuji": ["FUJI_VAULT", "FUJI_USDC"],
       "mantle-sepolia": ["MANTLE_SEPOLIA_VAULT", "MANTLE_SEPOLIA_USDC"],
+      "sepolia": ["SEPOLIA_VAULT", "SEPOLIA_USDC"],
     };
     for (const [c, [ve, ue]] of Object.entries(envs)) {
       process.env.CHAIN = c;
@@ -98,5 +99,43 @@ describe("resolveChain", () => {
     expect(resolveChain().zgModel).toBe("shared-model");
     process.env.GALILEO_ZG_MODEL = "0GM-1.0-35B-A3B";
     expect(resolveChain().zgModel).toBe("0GM-1.0-35B-A3B");
+  });
+
+  it("uses ordered free fallbacks for Ethereum Sepolia", () => {
+    process.env.CHAIN = "sepolia";
+    process.env.SEPOLIA_VAULT = "0x3333333333333333333333333333333333333333";
+    process.env.SEPOLIA_USDC = "0x4444444444444444444444444444444444444444";
+    delete process.env.SEPOLIA_RPC;
+    delete process.env.SEPOLIA_RPC_FALLBACKS;
+    expect(resolveChain().rpcUrls).toEqual([
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://sepolia.gateway.tenderly.co",
+    ]);
+  });
+
+  it("uses ordered free fallbacks for Base Sepolia", () => {
+    process.env.CHAIN = "base-sepolia";
+    process.env.BASE_SEPOLIA_VAULT = "0x3333333333333333333333333333333333333333";
+    process.env.BASE_SEPOLIA_USDC = "0x4444444444444444444444444444444444444444";
+    delete process.env.BASE_SEPOLIA_RPC;
+    delete process.env.BASE_SEPOLIA_RPC_FALLBACKS;
+    expect(resolveChain().rpcUrls).toEqual([
+      "https://base-sepolia-rpc.publicnode.com",
+      "https://base-sepolia.gateway.tenderly.co",
+      "https://sepolia.base.org",
+    ]);
+  });
+
+  it("normalizes configured fallbacks and removes duplicates", () => {
+    process.env.CHAIN = "sepolia";
+    process.env.SEPOLIA_VAULT = "0x3333333333333333333333333333333333333333";
+    process.env.SEPOLIA_USDC = "0x4444444444444444444444444444444444444444";
+    process.env.SEPOLIA_RPC = "https://primary.example";
+    process.env.SEPOLIA_RPC_FALLBACKS = " https://fallback.example, https://primary.example, ,https://last.example ";
+    expect(resolveChain().rpcUrls).toEqual([
+      "https://primary.example",
+      "https://fallback.example",
+      "https://last.example",
+    ]);
   });
 });
