@@ -1,7 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
 import { fetchEvmTradesAllChains } from "./evm-multichain";
 import { fetchSuiTrades, type TradeRow } from "./sui";
 import { SUI_CHAIN } from "./chains";
@@ -17,7 +17,7 @@ export function usePortfolio(opts?: { userScoped?: boolean; publicFallback?: boo
   const { activeChain } = useActiveChain();
   const { address: evmAddress, isConnected: evmConnected } = useAccount();
   const suiAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
+  const suiClient = useCurrentClient();
 
   const vm: PortfolioVm = activeChain.vm === "sui" ? "sui" : "evm";
   const walletConnected = vm === "evm" ? evmConnected : !!suiAccount;

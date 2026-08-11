@@ -1,14 +1,14 @@
 "use client";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { useCurrentAccount, useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient, useDAppKit } from "@mysten/dapp-kit-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { useSearchParams } from "next/navigation";
 import { vaultAbi } from "@/lib/vaultAbi";
 import { useActiveChain } from "@/lib/active-chain";
 import { usePortfolio } from "@/lib/use-portfolio";
-import { fetchSuiIntent, suiWithdrawTx } from "@/lib/sui";
+import { fetchSuiIntent, requireSuiTransactionDigest, suiWithdrawTx } from "@/lib/sui";
 import { chainByKey, CHAINS } from "@/lib/chains";
 import { ChainIcon, ChainBadge } from "@/components/chain-icon";
 import { Skeleton } from "@/components/skeleton";
@@ -74,8 +74,8 @@ function DashboardContent() {
 
   const { address: evmAddress } = useAccount();
   const suiAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: suiSignExec } = useSignAndExecuteTransaction();
+  const suiClient = useCurrentClient();
+  const dAppKit = useDAppKit();
   const posAddress = isSui ? suiAccount?.address : evmAddress;
 
   // Protocol feed (VM-aggregated, public fallback).
@@ -115,8 +115,8 @@ function DashboardContent() {
     if (isSui) {
       try {
         setSuiWithdrawing(true);
-        const res = await suiSignExec({ transaction: suiWithdrawTx(activeChain) });
-        setSuiTx(res.digest);
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: suiWithdrawTx(activeChain) });
+        setSuiTx(requireSuiTransactionDigest(result));
         toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet" });
         refetchSui();
       } catch (e) {

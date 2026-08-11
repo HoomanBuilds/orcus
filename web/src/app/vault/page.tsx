@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { useCurrentAccount, useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient, useDAppKit } from "@mysten/dapp-kit-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { vaultAbi } from "@/lib/vaultAbi";
 import { useActiveChain } from "@/lib/active-chain";
-import { fetchSuiIntent, suiWithdrawTx, suiRequestCancelTx } from "@/lib/sui";
+import { fetchSuiIntent, requireSuiTransactionDigest, suiWithdrawTx, suiRequestCancelTx } from "@/lib/sui";
 import { CHAINS } from "@/lib/chains";
 import { ChainIcon, ChainBadge } from "@/components/chain-icon";
 import { useToast } from "@/components/toast";
@@ -22,8 +22,8 @@ export default function VaultPage() {
 
   const { address: evmAddress } = useAccount();
   const suiAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: suiSignExec } = useSignAndExecuteTransaction();
+  const suiClient = useCurrentClient();
+  const dAppKit = useDAppKit();
   const address = isSui ? suiAccount?.address : evmAddress;
 
   const { data: evmIntent, refetch: refetchEvm } = useReadContract({
@@ -57,8 +57,8 @@ export default function VaultPage() {
     if (isSui) {
       try {
         setSuiWithdrawing(true);
-        const res = await suiSignExec({ transaction: suiWithdrawTx(activeChain) });
-        setSuiTx(res.digest);
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: suiWithdrawTx(activeChain) });
+        setSuiTx(requireSuiTransactionDigest(result));
         toast({ type: "success", title: "Withdrawn", description: "Balance returned to wallet" });
         refetchSui();
       } catch (e) {
@@ -74,7 +74,8 @@ export default function VaultPage() {
     try {
       setCancelling(true);
       if (isSui) {
-        await suiSignExec({ transaction: suiRequestCancelTx(activeChain) });
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: suiRequestCancelTx(activeChain) });
+        requireSuiTransactionDigest(result);
         refetchSui();
       } else {
         await writeCancelAsync({ abi: vaultAbi, address: activeChain.vault as `0x${string}`, functionName: "requestCancel", chainId: activeChain.evmChainId });

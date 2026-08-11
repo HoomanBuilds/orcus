@@ -1,14 +1,15 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from "wagmi";
-import { useCurrentAccount, useSuiClient, useSignAndExecuteTransaction, ConnectButton as SuiConnectButton } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient, useDAppKit } from "@mysten/dapp-kit-react";
+import { ConnectButton as SuiConnectButton } from "@mysten/dapp-kit-react/ui";
 import { useQuery } from "@tanstack/react-query";
 import { parseUnits, formatUnits, erc20Abi, isAddress } from "viem";
 import { useRouter } from "next/navigation";
 import { encryptIntentBrowser } from "@/lib/encrypt";
 import { vaultAbi } from "@/lib/vaultAbi";
 import { useActiveChain } from "@/lib/active-chain";
-import { suiDepositTx, fetchSuiIntent } from "@/lib/sui";
+import { suiDepositTx, fetchSuiIntent, requireSuiTransactionDigest } from "@/lib/sui";
 import { ChainIcon } from "@/components/chain-icon";
 import { StrategyBuilder, type BuilderState } from "@/components/strategy-builder";
 import type { Strategy } from "@/lib/strategy-schema";
@@ -56,8 +57,8 @@ export default function StrategyPage() {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: activeChain.evmChainId });
   const suiAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: suiSignExec } = useSignAndExecuteTransaction();
+  const suiClient = useCurrentClient();
+  const dAppKit = useDAppKit();
 
   const address = isSui ? suiAccount?.address : evmAddress;
   const dec = activeChain.nativeDecimals;
@@ -156,8 +157,8 @@ export default function StrategyPage() {
       const amt = parseUnits(amount, effDec);
       if (isSui) {
         setPhase("submitting");
-        const res = await suiSignExec({ transaction: suiDepositTx(activeChain, ciphertext, Number(slippage), amt) });
-        setTxHash(res.digest);
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: suiDepositTx(activeChain, ciphertext, Number(slippage), amt) });
+        setTxHash(requireSuiTransactionDigest(result));
       } else if (erc20) {
         if (((tokenAllowance ?? 0n) as bigint) < amt) {
           setPhase("approving");
@@ -221,7 +222,7 @@ export default function StrategyPage() {
             <h1 className="text-2xl font-light text-[#111] tracking-tight">Connect your Sui wallet</h1>
             <p className="text-sm text-black/40 leading-relaxed mt-3">Connect a Sui wallet to encrypt and submit a sealed intent on Sui.</p>
           </div>
-          <SuiConnectButton connectText="Connect Sui wallet" />
+          <SuiConnectButton>Connect Sui wallet</SuiConnectButton>
         </div>
       </div>
     );

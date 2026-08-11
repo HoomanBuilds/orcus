@@ -1,6 +1,6 @@
 "use client";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { ConnectButton as SuiConnectButton } from "@mysten/dapp-kit";
+import { ConnectButton as SuiConnectButton } from "@mysten/dapp-kit-react/ui";
 import { useActiveChain } from "@/lib/active-chain";
 
 export function WalletGate({ children }: { children: React.ReactNode }) {
@@ -77,7 +77,7 @@ export function WalletConnectPrompt({ page }: { page: string }) {
         {/* VM-aware connect */}
         <div className="flex justify-center">
           {isSui ? (
-            <SuiConnectButton connectText="Connect Sui wallet" />
+            <SuiConnectButton>Connect Sui wallet</SuiConnectButton>
           ) : (
             <ConnectButton label="Connect wallet" showBalance={false} chainStatus="none" accountStatus="address" />
           )}

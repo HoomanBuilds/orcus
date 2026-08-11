@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
+import { ProvidersLoader } from "./providers-loader";
 import { Navbar } from "@/components/navbar";
 import { PageTransition } from "@/components/page-transition";
 
@@ -41,12 +41,12 @@ export default function RootLayout({
       className={`${geistMono.variable} ${ibmPlexSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
-        <Providers>
+        <ProvidersLoader>
           <Navbar />
           <PageTransition>
             <main className="flex-1">{children}</main>
           </PageTransition>
-        </Providers>
+        </ProvidersLoader>
       </body>
     </html>
   );

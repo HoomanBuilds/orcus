@@ -1,7 +1,29 @@
+import { bcs } from "@mysten/sui/bcs";
+import type { SuiClientTypes } from "@mysten/sui/client";
+import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
-import type { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import type { ChainMeta } from "./chains";
+
+const uidBcs = bcs.struct("UID", { id: bcs.Address });
+const tableBcs = bcs.struct("Table", { id: uidBcs, size: bcs.u64() });
+const vaultBcs = bcs.struct("Vault", {
+  id: uidBcs,
+  intents: tableBcs,
+  nonces: tableBcs,
+  cancelAt: tableBcs,
+  attestor: bcs.vector(bcs.u8()),
+});
+const intentBcs = bcs.struct("Intent", {
+  encryptedGoal: bcs.vector(bcs.u8()),
+  deposit: bcs.struct("Balance", { value: bcs.u64() }),
+  maxSlippageBps: bcs.u64(),
+});
+const tradeExecutedBcs = bcs.struct("TradeExecuted", {
+  user: bcs.Address,
+  amountOut: bcs.u64(),
+  receiptHash: bcs.vector(bcs.u8()),
+});
 
 function hexToBytes(hex: string): number[] {
   const h = hex.replace(/^0x/, "");
@@ -10,10 +32,8 @@ function hexToBytes(hex: string): number[] {
   return out;
 }
 
-function byteArrToHex(v: unknown): string {
-  if (Array.isArray(v)) return `0x${(v as number[]).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
-  if (typeof v === "string") return v.startsWith("0x") ? v : `0x${v}`;
-  return "0x";
+function isSuiNotFoundError(error: unknown): boolean {
+  return error instanceof Error && /\bnot found\b/i.test(error.message);
 }
 
 // Browser-wallet version of scripts/create-sui-intent.ts: deposit SUI + encrypted goal.
@@ -49,21 +69,20 @@ export function suiRequestCancelTx(chain: ChainMeta): Transaction {
 
 export interface SuiIntent { active: boolean; amountMist: bigint; }
 
-// Reads the user's intent from the vault's intents Table dynamic field.
-// `client` is the dapp-kit SuiClient (untyped JSON-RPC content).
-export async function fetchSuiIntent(client: SuiJsonRpcClient, chain: ChainMeta, user: string): Promise<SuiIntent> {
+export async function fetchSuiIntent(client: SuiGrpcClient, chain: ChainMeta, user: string): Promise<SuiIntent> {
   if (!chain.sui) return { active: false, amountMist: 0n };
+  const { object: vault } = await client.getObject({ objectId: chain.vault, include: { content: true } });
+  const tableId = vaultBcs.parse(vault.content).intents.id.id;
   try {
-    const v = (await client.getObject({ id: chain.vault, options: { showContent: true } })) as { data?: { content?: { fields?: { intents?: { fields?: { id?: { id?: string } } } } } } };
-    const tableId = v?.data?.content?.fields?.intents?.fields?.id?.id;
-    if (!tableId) return { active: false, amountMist: 0n };
-    const f = (await client.getDynamicFieldObject({ parentId: tableId, name: { type: "address", value: user } })) as { data?: { content?: { fields?: { value?: { fields?: { deposit?: unknown } } } } } };
-    if (!f?.data) return { active: false, amountMist: 0n };
-    const dep = f.data.content?.fields?.value?.fields?.deposit as unknown;
-    const amt = typeof dep === "object" && dep !== null ? (dep as { value?: string; fields?: { value?: string } }).fields?.value ?? (dep as { value?: string }).value : dep;
-    return { active: true, amountMist: BigInt((amt as string | number) ?? 0) };
-  } catch {
-    return { active: false, amountMist: 0n };
+    const { dynamicField } = await client.getDynamicField({
+      parentId: tableId,
+      name: { type: "address", bcs: bcs.Address.serialize(user).toBytes() },
+    });
+    const intent = intentBcs.parse(dynamicField.value.bcs);
+    return { active: true, amountMist: BigInt(intent.deposit.value) };
+  } catch (error) {
+    if (isSuiNotFoundError(error)) return { active: false, amountMist: 0n };
+    throw error;
   }
 }
 
@@ -77,26 +96,45 @@ export interface TradeRow {
   ts: number;
 }
 
-// Reads TradeExecuted events on Sui, newest first.
-export async function fetchSuiTrades(client: SuiJsonRpcClient, chain: ChainMeta, user?: string): Promise<TradeRow[]> {
+export async function fetchSuiTrades(client: SuiGrpcClient, chain: ChainMeta, user?: string): Promise<TradeRow[]> {
   if (!chain.sui) return [];
-  try {
-    const res = (await client.queryEvents({
-      query: { MoveEventType: `${chain.sui.eventsPkg}::vault::TradeExecuted` },
+  const rows: TradeRow[] = [];
+  let before: string | null = null;
+  for (let pageNumber = 0; pageNumber < 20 && rows.length < 50; pageNumber += 1) {
+    const page = await client.listEvents({
+      filter: { eventType: `${chain.sui.eventsPkg}::vault::TradeExecuted` },
+      before,
       limit: 50,
       order: "descending",
-    })) as { data?: Array<{ parsedJson?: { user?: string; amount_out?: string; receipt_hash?: unknown }; id?: { txDigest?: string }; timestampMs?: string }> };
-    const rows: TradeRow[] = (res.data ?? []).map((e) => ({
-      chainKey: chain.key,
-      vm: "sui" as const,
-      user: e.parsedJson?.user ?? "",
-      amountOut: String(e.parsedJson?.amount_out ?? "0"),
-      receiptHash: byteArrToHex(e.parsedJson?.receipt_hash),
-      txHash: e.id?.txDigest ?? "",
-      ts: Number(e.timestampMs ?? 0),
-    }));
-    return user ? rows.filter((r) => r.user.toLowerCase() === user.toLowerCase()) : rows;
-  } catch {
-    return [];
+    });
+    for (const event of page.events) {
+      const trade = tradeExecutedBcs.parse(event.bcs);
+      rows.push({
+        chainKey: chain.key,
+        vm: "sui",
+        user: trade.user,
+        amountOut: trade.amountOut,
+        receiptHash: `0x${Array.from(trade.receiptHash, (byte) => byte.toString(16).padStart(2, "0")).join("")}`,
+        txHash: event.transactionDigest,
+        ts: 0,
+      });
+    }
+    const nextCursor = page.endCursor;
+    if (!page.hasNextPage || !nextCursor || nextCursor === before) break;
+    before = nextCursor;
   }
+  return user ? rows.filter((row) => row.user.toLowerCase() === user.toLowerCase()) : rows;
+}
+
+type SuiTransactionResult =
+  | { $kind: "Transaction"; Transaction: Pick<SuiClientTypes.Transaction, "digest" | "status"> }
+  | { $kind: "FailedTransaction"; FailedTransaction: Pick<SuiClientTypes.Transaction, "digest" | "status"> };
+
+export function requireSuiTransactionDigest(result: SuiTransactionResult): string {
+  const transaction = result.$kind === "Transaction" ? result.Transaction : result.FailedTransaction;
+  if (result.$kind === "FailedTransaction" || !transaction.status.success) {
+    const detail = transaction.status.error ? JSON.stringify(transaction.status.error) : "unknown error";
+    throw new Error(`Sui transaction ${transaction.digest} failed: ${detail}`);
+  }
+  return transaction.digest;
 }
