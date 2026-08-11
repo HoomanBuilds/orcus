@@ -10,7 +10,7 @@ export interface ChainMeta {
   shortLabel: string;
   vm: Vm;
   evmChainId?: number;        // evm only
-  rpcUrl: string;
+  rpcUrls: readonly [string, ...string[]];
   vault: string;             // evm vault address OR sui Vault object id
   settlementToken: string;   // oUSDC/USDC address (evm) / DeepBook DBUSDC coin type (sui)
   nativeSymbol: string;
@@ -32,7 +32,7 @@ const SUI_DBUSDC = "0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a
 export const CHAINS: ChainMeta[] = [
   {
     key: "galileo", name: "0G Galileo", shortLabel: "0G", vm: "evm", evmChainId: 16602,
-    rpcUrl: "https://evmrpc-testnet.0g.ai",
+    rpcUrls: ["https://evmrpc-testnet.0g.ai"],
     vault: "0x21D50633853DDbecA1920C553f1D89b2d3E9847f",
     settlementToken: "0x58F995999cae47d39e987e393b9fdd422f43cec5",
     nativeSymbol: "OG", nativeDecimals: 18,
@@ -42,7 +42,7 @@ export const CHAINS: ChainMeta[] = [
   },
   {
     key: "arbitrum-sepolia", name: "Arbitrum Sepolia", shortLabel: "ARB", vm: "evm", evmChainId: 421614,
-    rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
+    rpcUrls: ["https://sepolia-rollup.arbitrum.io/rpc"],
     vault: "0x3d1360f91521f99C913962ab6fcB15B62653CAEF",
     settlementToken: "0xD5bdd124De482d3e0244F6122E403983A4E25D62",
     nativeSymbol: "ETH", nativeDecimals: 18,
@@ -52,7 +52,11 @@ export const CHAINS: ChainMeta[] = [
   },
   {
     key: "base-sepolia", name: "Base Sepolia", shortLabel: "BASE", vm: "evm", evmChainId: 84532,
-    rpcUrl: "https://sepolia.base.org",
+    rpcUrls: [
+      "https://base-sepolia-rpc.publicnode.com",
+      "https://base-sepolia.gateway.tenderly.co",
+      "https://sepolia.base.org",
+    ],
     vault: "0x3d1360f91521f99C913962ab6fcB15B62653CAEF",
     settlementToken: "0xD5bdd124De482d3e0244F6122E403983A4E25D62",
     nativeSymbol: "ETH", nativeDecimals: 18,
@@ -62,7 +66,7 @@ export const CHAINS: ChainMeta[] = [
   },
   {
     key: "avalanche-fuji", name: "Avalanche Fuji", shortLabel: "FUJI", vm: "evm", evmChainId: 43113,
-    rpcUrl: "https://api.avax-test.network/ext/bc/C/rpc",
+    rpcUrls: ["https://api.avax-test.network/ext/bc/C/rpc"],
     vault: "0x3d1360f91521f99C913962ab6fcB15B62653CAEF",
     settlementToken: "0xD5bdd124De482d3e0244F6122E403983A4E25D62",
     nativeSymbol: "AVAX", nativeDecimals: 18,
@@ -72,7 +76,7 @@ export const CHAINS: ChainMeta[] = [
   },
   {
     key: "mantle-sepolia", name: "Mantle Sepolia", shortLabel: "MNT", vm: "evm", evmChainId: 5003,
-    rpcUrl: "https://rpc.sepolia.mantle.xyz",
+    rpcUrls: ["https://rpc.sepolia.mantle.xyz"],
     vault: "0x1D97662e187D8964B6a0783865326FEde8d14b8C",
     settlementToken: "0x5Bd4ea1D03a73c67f40C1dbF02a1ffb38b7d66d0",
     nativeSymbol: "MNT", nativeDecimals: 18,
@@ -82,7 +86,10 @@ export const CHAINS: ChainMeta[] = [
   },
   {
     key: "sepolia", name: "Ethereum Sepolia", shortLabel: "ETH", vm: "evm", evmChainId: 11155111,
-    rpcUrl: "https://sepolia.drpc.org",
+    rpcUrls: [
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://sepolia.gateway.tenderly.co",
+    ],
     vault: "0x5e08CEd8e3b901B6A46e1488b7a7F52576ceb411",
     settlementToken: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // real USDC (6dec) via real Uniswap V3
     nativeSymbol: "ETH", nativeDecimals: 18,
@@ -92,7 +99,7 @@ export const CHAINS: ChainMeta[] = [
   },
   {
     key: "sui", name: "Sui Testnet", shortLabel: "SUI", vm: "sui",
-    rpcUrl: "https://fullnode.testnet.sui.io:443",
+    rpcUrls: ["https://fullnode.testnet.sui.io:443"],
     vault: "0x47e998d5b287f123e128f54b5b23f6f38a2bde1bf1fa8ad288a74d81b0b154f1",
     settlementToken: SUI_DBUSDC,
     nativeSymbol: "SUI", nativeDecimals: 9,

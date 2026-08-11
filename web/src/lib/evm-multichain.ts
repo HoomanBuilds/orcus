@@ -1,8 +1,9 @@
-import { createPublicClient, http, type Chain } from "viem";
+import { createPublicClient, type Chain } from "viem";
 import { galileo, sepolia, arbitrumSepolia, baseSepolia, avalancheFuji, mantleSepoliaTestnet } from "./chain";
 import { vaultAbi } from "./vaultAbi";
 import { EVM_CHAINS } from "./chains";
 import type { TradeRow } from "./sui";
+import { createEvmTransport } from "./rpc";
 
 const VIEM_CHAINS: Record<string, Chain> = {
   "galileo": galileo,
@@ -26,7 +27,7 @@ export async function fetchEvmTradesAllChains(user?: `0x${string}`): Promise<Tra
       const viemChain = VIEM_CHAINS[meta.key];
       if (!viemChain) return [];
       try {
-        const client = createPublicClient({ chain: viemChain, transport: http(meta.rpcUrl) });
+        const client = createPublicClient({ chain: viemChain, transport: createEvmTransport(meta.rpcUrls) });
         const current = await client.getBlockNumber();
         const floor = current > LOOKBACK ? current - LOOKBACK : 0n;
         const out: TradeRow[] = [];
