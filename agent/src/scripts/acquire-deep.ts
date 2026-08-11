@@ -1,8 +1,8 @@
-import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { resolveSuiConfig, SUI_TYPE } from "../sui/config.js";
 import { resolveSuiKeys } from "../sui/keys.js";
+import { createSuiClient, requireSuccessfulSuiTransaction } from "../sui/client.js";
 
 /// Buys DEEP for swap fees from the whitelisted (0-fee) DEEP/SUI pool. DeepBook's
 /// non-whitelisted pools (SUI/DBUSDC) charge fees in DEEP, which the agent splits a
@@ -11,7 +11,7 @@ import { resolveSuiKeys } from "../sui/keys.js";
 async function main() {
   const cfg = resolveSuiConfig();
   const { agentKeypair } = resolveSuiKeys();
-  const client = new SuiJsonRpcClient({ url: cfg.rpcUrl, network: "testnet" });
+  const client = createSuiClient(cfg.grpcUrl);
   const agent = agentKeypair.toSuiAddress();
 
   const spendMist = BigInt(process.env.DEEP_SPEND_MIST ?? "250000000");
@@ -27,9 +27,10 @@ async function main() {
   });
   tx.transferObjects([deepOut, suiRem, deepRem], tx.pure.address(agent));
 
-  const res = await client.signAndExecuteTransaction({ signer: agentKeypair, transaction: tx, options: { showEffects: true } });
-  console.log("acquire-deep digest:", res.digest, "status:", res.effects?.status?.status);
+  const result = await client.signAndExecuteTransaction({ signer: agentKeypair, transaction: tx, include: { effects: true } });
+  const transaction = requireSuccessfulSuiTransaction(result);
+  console.log("acquire-deep digest:", transaction.digest, "status: success");
   const bal = await client.getBalance({ owner: agent, coinType: cfg.deepType });
-  console.log("agent DEEP balance:", Number(bal.totalBalance) / 1e6, "DEEP");
+  console.log("agent DEEP balance:", Number(bal.balance.balance) / 1e6, "DEEP");
 }
 main().catch((e) => { console.error("acquire-deep failed:", String(e)); process.exit(1); });

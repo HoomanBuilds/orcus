@@ -10,7 +10,7 @@ import "dotenv/config";
 // DeepBook testnet addresses default to the live deployment (verified on-chain); override
 // via env if the protocol upgrades.
 export interface SuiConfig {
-  rpcUrl: string;
+  grpcUrl: string;
   packageId: string;
   eventsPkg: string; // original package id; event/struct types keep it across upgrades
   vaultId: string;
@@ -35,7 +35,7 @@ export const SUI_TYPE = "0x2::sui::SUI";
 
 export function resolveSuiConfig(): SuiConfig {
   return {
-    rpcUrl: process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443",
+    grpcUrl: process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443",
     packageId: req("SUI_PACKAGE_ID"),
     eventsPkg: process.env.SUI_EVENTS_PKG ?? "0x07e3af4c0e5389fe27b9fc2519cd5ccdfaae772085ce1a9e754aeb55519f9dc8",
     vaultId: req("SUI_VAULT_ID"),

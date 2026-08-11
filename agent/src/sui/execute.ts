@@ -1,9 +1,10 @@
-import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { signSuiExec, type SuiExecParams } from "../sign/suiExec.js";
 import { SUI_TYPE, type SuiConfig } from "./config.js";
+import { requireSuccessfulSuiTransaction } from "./client.js";
 
 // Sui counterpart of the EVM agent's executeTrade, composed in ONE PTB:
 //   1. split a little DEEP (held by the agent, topped up via `npm run deep:acquire`) for the fee
@@ -15,7 +16,7 @@ import { SUI_TYPE, type SuiConfig } from "./config.js";
 // so routing through DeepBook keeps the dark-pool guarantees while using real liquidity.
 // NOTE: the SUI/DBUSDC pool has a 1 SUI min order size, so deposits must be >= 1 SUI.
 export async function executeSuiTrade(
-  client: SuiJsonRpcClient,
+  client: SuiGrpcClient,
   agentKeypair: Ed25519Keypair,
   attestorKeypair: Ed25519Keypair,
   cfg: SuiConfig,
@@ -26,13 +27,13 @@ export async function executeSuiTrade(
   const receiptBytes = Array.from(Uint8Array.from(Buffer.from(p.receiptHash.replace(/^0x/, ""), "hex")));
   const agentAddr = agentKeypair.toSuiAddress();
 
-  const deepCoins = await client.getCoins({ owner: agentAddr, coinType: cfg.deepType });
-  if (deepCoins.data.length === 0) throw new Error("agent holds no DEEP for DeepBook fees; run `npm run deep:acquire`");
+  const deepCoins = await client.listCoins({ owner: agentAddr, coinType: cfg.deepType });
+  if (deepCoins.objects.length === 0) throw new Error("agent holds no DEEP for DeepBook fees; run `npm run deep:acquire`");
 
   const tx = new Transaction();
-  const deepSrc = tx.object(deepCoins.data[0].coinObjectId);
-  if (deepCoins.data.length > 1) {
-    tx.mergeCoins(deepSrc, deepCoins.data.slice(1).map((c) => tx.object(c.coinObjectId)));
+  const deepSrc = tx.object(deepCoins.objects[0].objectId);
+  if (deepCoins.objects.length > 1) {
+    tx.mergeCoins(deepSrc, deepCoins.objects.slice(1).map((coin) => tx.object(coin.objectId)));
   }
   const deepFee = tx.splitCoins(deepSrc, [tx.pure.u64(cfg.deepFeePerSwap)]);
 
@@ -69,6 +70,6 @@ export async function executeSuiTrade(
 
   tx.transferObjects([userSuiRem, deepRem], tx.pure.address(agentAddr));
 
-  const res = await client.signAndExecuteTransaction({ signer: agentKeypair, transaction: tx });
-  return res.digest;
+  const result = await client.signAndExecuteTransaction({ signer: agentKeypair, transaction: tx });
+  return requireSuccessfulSuiTransaction(result).digest;
 }

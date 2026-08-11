@@ -1,10 +1,10 @@
 import { PrivateKey } from "eciesjs";
-import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { env } from "../env.js";
 import { encryptIntent } from "../crypto/ecies.js";
 import { resolveSuiConfig } from "../sui/config.js";
 import { resolveSuiKeys } from "../sui/keys.js";
+import { createSuiClient, requireSuccessfulSuiTransaction } from "../sui/client.js";
 
 // Local test helper: deposits an encrypted intent on the Sui vault so the Sui
 // listener (src/sui/index.ts) has something to process. Encrypts to the agent's
@@ -12,7 +12,7 @@ import { resolveSuiKeys } from "../sui/keys.js";
 async function main() {
   const cfg = resolveSuiConfig();
   const { agentKeypair } = resolveSuiKeys();
-  const client = new SuiJsonRpcClient({ url: cfg.rpcUrl, network: "testnet" });
+  const client = createSuiClient(cfg.grpcUrl);
 
   const sk = new PrivateKey(Buffer.from(env.agentEciesSk.replace(/^0x/, ""), "hex"));
   const agentEciesPub = `0x${sk.publicKey.toHex()}`;
@@ -30,13 +30,14 @@ async function main() {
     arguments: [tx.object(cfg.vaultId), coin, tx.pure.vector("u8", egBytes), tx.pure.u64(maxSlippageBps)],
   });
 
-  const res = await client.signAndExecuteTransaction({
+  const result = await client.signAndExecuteTransaction({
     signer: agentKeypair,
     transaction: tx,
-    options: { showEffects: true },
+    include: { effects: true },
   });
-  console.log(`deposit digest: ${res.digest}`);
-  console.log(`status: ${res.effects?.status?.status}`);
+  const transaction = requireSuccessfulSuiTransaction(result);
+  console.log(`deposit digest: ${transaction.digest}`);
+  console.log("status: success");
   console.log(`user (depositor): ${agentKeypair.toSuiAddress()}`);
   console.log(`goal="${goal}" deposit=${depositMist} MIST slippage=${maxSlippageBps}bps`);
 }
